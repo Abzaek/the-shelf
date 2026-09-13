@@ -1,10 +1,11 @@
 import type { BookStorage } from "./bookStorage";
-import { IndexedDbBookStorage } from "./indexedDbStorage";
+import { HttpBookStorage } from "./httpStorage";
 
 /**
- * Single storage instance used by hooks and app logic.
- * Swap the implementation here (e.g. SQLite) without touching the UI.
+ * Single storage instance used by hooks and app logic. The UI only knows the
+ * BookStorage interface; today it talks to the server API.
  */
-export const storage: BookStorage & IndexedDbBookStorage = new IndexedDbBookStorage();
+export const storage: BookStorage & HttpBookStorage = new HttpBookStorage();
 export { storageEvents } from "./events";
+export { ApiError } from "./httpStorage";
 export type { BookStorage } from "./bookStorage";

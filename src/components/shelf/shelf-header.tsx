@@ -6,6 +6,7 @@ import { BookOpen, Plus, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLibrary } from "@/components/library-provider";
+import { AccountMenu } from "./account-menu";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -77,6 +78,7 @@ export function ShelfHeader() {
             </TooltipTrigger>
             <TooltipContent>Settings</TooltipContent>
           </Tooltip>
+          <AccountMenu />
         </div>
       </div>
 

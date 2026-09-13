@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Download, FileArchive, Moon, Sun, SunMoon, Trash2, Upload, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, FileArchive, LogOut, Moon, Sun, SunMoon, Trash2, Upload, Sparkles } from "lucide-react";
+import { ProgressBar } from "@/components/books/progress-bar";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -25,6 +26,8 @@ import { addSampleBooks } from "@/lib/seed";
 import { storage } from "@/lib/storage";
 import { downloadBlob } from "@/lib/utils/download";
 import { formatBytes } from "@/lib/utils/format";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { ReadingMode, ThemePreference, ZoomPreset } from "@/types";
 
@@ -61,21 +64,20 @@ function Row({ label, description, htmlFor, children }: { label: string; descrip
 }
 
 export function SettingsPage() {
-  const { settings, updateSettings } = useLibrary();
+  const { settings, updateSettings, user, usage, signOut } = useLibrary();
+  const router = useRouter();
   const { stats } = useBooks();
-  const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null);
   const [exporting, setExporting] = useState<"json" | "zip" | null>(null);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [pendingImport, setPendingImport] = useState<ParsedBackup | null>(null);
   const [importing, setImporting] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearText, setClearText] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    navigator.storage?.estimate?.().then((e) => e.usage !== undefined && e.quota !== undefined && setUsage({ usage: e.usage, quota: e.quota }));
-  }, [stats.total]);
 
   const exportJson = async () => {
     setExporting("json");
@@ -144,6 +146,18 @@ export function SettingsPage() {
     toast("Library cleared");
   };
 
+  const deleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await authClient.deleteAccount(deletePassword);
+      toast("Account deleted");
+      router.replace("/login");
+    } catch (err) {
+      toast.error("Could not delete account", { description: err instanceof Error ? err.message : undefined });
+      setDeleting(false);
+    }
+  };
+
   const seed = async () => {
     setSeeding(true);
     try {
@@ -159,7 +173,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="font-serif text-[28px] font-medium leading-none tracking-tight sm:text-[32px]">Settings</h1>
-      <p className="mt-2 mb-10 text-sm text-muted-foreground">Everything lives in this browser. Back it up now and then.</p>
+      <p className="mt-2 mb-10 text-sm text-muted-foreground">Your books live on the server, in your account. Back up now and then anyway.</p>
 
       <Section title="Appearance">
         <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2 sm:max-w-md">
@@ -222,7 +236,34 @@ export function SettingsPage() {
         </Row>
       </Section>
 
-      <Section title="Library" description={usage ? `Using ${formatBytes(usage.usage)} of about ${formatBytes(usage.quota)} available.` : undefined}>
+      <Section title="Account" description={user ? user.email : undefined}>
+        {usage && (
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between text-[13px]">
+              <span className="text-muted-foreground">Storage used</span>
+              <span className="tabular-nums">
+                {formatBytes(usage.usedBytes)} of {formatBytes(usage.quotaBytes)}
+              </span>
+            </div>
+            <ProgressBar value={(usage.usedBytes / Math.max(1, usage.quotaBytes)) * 100} size="sm" label="Storage used" />
+            <p className="text-[12.5px] text-muted-foreground">
+              {stats.total} {stats.total === 1 ? "book" : "books"} on your shelf. Each account gets {formatBytes(usage.quotaBytes)}.
+            </p>
+          </div>
+        )}
+        <Row label="Sign out" description="You can sign back in on any device.">
+          <Button variant="outline" onClick={() => void signOut()}>
+            <LogOut aria-hidden data-icon="inline-start" /> Sign out
+          </Button>
+        </Row>
+        <Row label="Delete account" description="Removes your account and every book, file, note and bookmark. Permanent.">
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 aria-hidden data-icon="inline-start" /> Delete…
+          </Button>
+        </Row>
+      </Section>
+
+      <Section title="Library">
         <Row label="Export library" description="Metadata, bookmarks, notes, collections and progress as JSON.">
           <Button variant="outline" onClick={exportJson} disabled={!!exporting}>
             <Download aria-hidden data-icon="inline-start" /> {exporting === "json" ? "Exporting…" : "Export JSON"}
@@ -255,7 +296,7 @@ export function SettingsPage() {
             <Sparkles aria-hidden data-icon="inline-start" /> {seeding ? "Adding…" : "Add samples"}
           </Button>
         </Row>
-        <Row label="Clear library" description="Delete every book, PDF, note and bookmark from this device.">
+        <Row label="Clear library" description="Delete every book, file, note and bookmark from your account.">
           <Button variant="destructive" onClick={() => setClearOpen(true)} disabled={stats.total === 0}>
             <Trash2 aria-hidden data-icon="inline-start" /> Clear…
           </Button>
@@ -290,13 +331,39 @@ export function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete account confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={(o) => { setDeleteOpen(o); if (!o) setDeletePassword(""); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-xl font-medium">Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Everything on your shelf is deleted from the server immediately. Export a backup first if you want to keep anything.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="delete-password">Confirm with your password</Label>
+            <Input id="delete-password" type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void deleteAccount(); }}
+              disabled={!deletePassword || deleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete account"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Clear confirmation */}
       <AlertDialog open={clearOpen} onOpenChange={(o) => { setClearOpen(o); if (!o) setClearText(""); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="font-serif text-xl font-medium">Clear the whole library?</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes {stats.total} {stats.total === 1 ? "book" : "books"}, every PDF, all notes, bookmarks and collections from this device. Export a backup first if you want to keep anything.
+              This deletes {stats.total} {stats.total === 1 ? "book" : "books"}, every file, all notes, bookmarks and collections from your account. Export a backup first if you want to keep anything.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid gap-1.5">

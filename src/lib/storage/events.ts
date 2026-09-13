@@ -2,7 +2,7 @@
  * Tiny pub/sub so hooks can refresh when storage changes,
  * without the UI ever touching IndexedDB directly.
  */
-export type StorageTopic = "books" | "covers" | "bookmarks" | "notes" | "collections" | "settings";
+export type StorageTopic = "books" | "covers" | "bookmarks" | "notes" | "collections" | "settings" | "auth";
 
 type Listener = (topic: StorageTopic, id?: string) => void;
 

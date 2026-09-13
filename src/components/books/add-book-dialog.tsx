@@ -168,7 +168,7 @@ export function AddBookDialog() {
           <DialogDescription>
             {step === "details"
               ? "Check the details before it goes on the shelf."
-              : "Add a PDF or EPUB you own. It stays on this device."}
+              : "Add a PDF or EPUB you own. It’s stored in your account."}
           </DialogDescription>
         </DialogHeader>
 

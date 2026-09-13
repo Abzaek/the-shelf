@@ -29,6 +29,10 @@ export interface BookStorage {
 
   // Files
   getFile(fileId: string): Promise<Blob | undefined>;
+  /** Direct URL for streaming the file (used by the readers). */
+  fileUrl(fileId: string): string;
+  /** Direct URL for the cover thumbnail; `version` busts caches after a cover change. */
+  coverUrl(coverId: string, version?: string): string;
   setFile(bookId: string, file: Blob, fileName: string, totalPages: number): Promise<Book>;
   getCover(coverId: string): Promise<Blob | undefined>;
   setCover(bookId: string, cover: Blob | null, kind: Book["coverKind"]): Promise<Book>;

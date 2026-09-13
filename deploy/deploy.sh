@@ -31,6 +31,13 @@ rsync -az --delete "$STAGE/" "$HOST:$REMOTE_APP/releases/$RELEASE/"
 echo "▶ Switching release and restarting…"
 ssh "$HOST" bash -s <<REMOTE
 set -e
+# better-sqlite3 is a native module: swap in the Linux build kept at native/ (see deploy/README notes).
+NATIVE="$REMOTE_APP/native/node_modules/better-sqlite3"
+if [ -d "\$NATIVE" ]; then
+  TARGET=\$(find "$REMOTE_APP/releases/$RELEASE/node_modules" -maxdepth 3 -type d -name better-sqlite3 | head -1)
+  if [ -n "\$TARGET" ]; then rm -rf "\$TARGET" && cp -R "\$NATIVE" "\$TARGET"; fi
+fi
+[ -f "$REMOTE_APP/shelf.env" ] || { echo "Missing $REMOTE_APP/shelf.env (SHELF_SESSION_SECRET). Aborting."; exit 1; }
 ln -sfn "$REMOTE_APP/releases/$RELEASE" "$REMOTE_APP/current"
 cd "$REMOTE_APP/current"
 pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null

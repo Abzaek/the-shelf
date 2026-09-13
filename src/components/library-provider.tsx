@@ -1,12 +1,19 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import type { Book, Collection, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { storage, storageEvents } from "@/lib/storage";
+import { authClient, type SessionUser, type Usage } from "@/lib/auth-client";
 
 interface LibraryContextValue {
+  user: SessionUser | null;
+  usage: Usage | null;
+  authLoading: boolean;
+  refreshSession: () => Promise<void>;
+  signOut: () => Promise<void>;
   books: Book[];
   booksLoading: boolean;
   booksError: Error | null;
@@ -29,7 +36,17 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
+const PUBLIC_PATHS = ["/login", "/register"];
+
 export function LibraryProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isPublic = PUBLIC_PATHS.includes(pathname);
+
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [books, setBooks] = useState<Book[]>([]);
   const [booksLoading, setBooksLoading] = useState(true);
   const [booksError, setBooksError] = useState<Error | null>(null);
@@ -45,11 +62,25 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const { setTheme: applyTheme } = useTheme();
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const info = await authClient.session();
+      setUser(info.user);
+      setUsage(info.usage);
+    } catch {
+      setUser(null);
+      setUsage(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
   const refreshBooks = useCallback(async () => {
     try {
       const list = await storage.getBooks();
       setBooks(list.sort((a, b) => a.title.localeCompare(b.title)));
       setBooksError(null);
+      authClient.usage().then(setUsage).catch(() => null);
     } catch (err) {
       setBooksError(err instanceof Error ? err : new Error(String(err)));
     } finally {
@@ -60,19 +91,39 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const refreshCollections = useCallback(async () => {
     try {
       setCollections(await storage.getCollections());
+    } catch {
+      /* handled by auth redirect */
     } finally {
       setCollectionsLoading(false);
     }
   }, []);
 
   const refreshSettings = useCallback(async () => {
-    const next = await storage.getSettings();
-    setSettings(next);
-    setSettingsLoaded(true);
+    try {
+      setSettings(await storage.getSettings());
+      setSettingsLoaded(true);
+    } catch {
+      /* handled by auth redirect */
+    }
   }, []);
 
+  // Session first; library data only once signed in.
   useEffect(() => {
-    // Initial load: these are async IndexedDB reads; state is set after await, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshSession();
+  }, [refreshSession]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      if (!isPublic) router.replace(`/login${pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""}`);
+      return;
+    }
+    if (isPublic) {
+      router.replace("/");
+      return;
+    }
+    // Async fetches: state is set after await, not synchronously.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshBooks();
     void refreshCollections();
@@ -81,10 +132,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (topic === "books") void refreshBooks();
       if (topic === "collections") void refreshCollections();
       if (topic === "settings") void refreshSettings();
+      if (topic === "auth") {
+        setUser(null);
+        setUsage(null);
+      }
     });
-  }, [refreshBooks, refreshCollections, refreshSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id, isPublic]);
 
-  // Persisted theme preference drives next-themes.
   useEffect(() => {
     if (settingsLoaded) applyTheme(settings.theme);
   }, [settings.theme, settingsLoaded, applyTheme]);
@@ -94,29 +149,29 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     await storage.updateSettings(patch);
   }, []);
 
+  const signOut = useCallback(async () => {
+    await authClient.logout().catch(() => null);
+    setUser(null);
+    setUsage(null);
+    setBooks([]);
+    setCollections([]);
+    setSettingsLoaded(false);
+    router.replace("/login");
+  }, [router]);
+
   const value = useMemo<LibraryContextValue>(
     () => ({
-      books,
-      booksLoading,
-      booksError,
-      refreshBooks,
-      collections,
-      collectionsLoading,
-      settings,
-      settingsLoaded,
-      updateSettings,
-      selectedBookId,
-      openBook: setSelectedBookId,
-      addBookOpen,
-      setAddBookOpen,
-      editBookId,
-      setEditBookId,
-      searchOpen,
-      setSearchOpen,
+      user, usage, authLoading, refreshSession, signOut,
+      books, booksLoading, booksError, refreshBooks,
+      collections, collectionsLoading,
+      settings, settingsLoaded, updateSettings,
+      selectedBookId, openBook: setSelectedBookId,
+      addBookOpen, setAddBookOpen, editBookId, setEditBookId, searchOpen, setSearchOpen,
     }),
     [
-      books, booksLoading, booksError, refreshBooks, collections, collectionsLoading,
-      settings, settingsLoaded, updateSettings, selectedBookId, addBookOpen, editBookId, searchOpen,
+      user, usage, authLoading, refreshSession, signOut, books, booksLoading, booksError, refreshBooks,
+      collections, collectionsLoading, settings, settingsLoaded, updateSettings, selectedBookId,
+      addBookOpen, editBookId, searchOpen,
     ],
   );
 

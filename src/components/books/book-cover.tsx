@@ -6,7 +6,7 @@ import { useCoverUrl } from "@/hooks/use-cover-url";
 import type { Book } from "@/types";
 
 interface BookCoverProps {
-  book: Pick<Book, "id" | "title" | "author" | "coverId">;
+  book: Pick<Book, "id" | "title" | "author" | "coverId"> & { updatedAt?: string };
   className?: string;
   /** Override the stored cover with a transient preview blob URL. */
   previewUrl?: string | null;
@@ -18,7 +18,7 @@ interface BookCoverProps {
  * still reads as a shelf of books.
  */
 export function BookCover({ book, className, previewUrl }: BookCoverProps) {
-  const storedUrl = useCoverUrl(book.coverId);
+  const storedUrl = useCoverUrl(book.coverId, book.updatedAt);
   const url = previewUrl ?? storedUrl;
   const palette = paletteFor(book.title + book.author);
 

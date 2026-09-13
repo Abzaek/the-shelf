@@ -2,7 +2,7 @@
 
 A private, personal digital bookshelf for the PDFs and EPUBs you own. Open The Shelf, browse your books, pick one, read.
 
-Everything runs in the browser. Books, covers, notes, bookmarks and reading progress are stored in IndexedDB on your device. There is no backend, no account and no network access beyond loading the app itself.
+Books, covers, notes, bookmarks and reading progress live on the server, per account. Sign up with an email and password; each account gets its own quota (250 MB by default), and the whole store has a hard cap (10 GB by default). Nothing is shared between accounts.
 
 ## Run it
 
@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-Then open http://localhost:3000. `pnpm build && pnpm start` serves a production build.
+Then open http://localhost:3000 and create the first account (it becomes the admin). Data goes to `./.data` in development; see `.env.example` for the knobs. `pnpm build && pnpm start` serves a production build.
 
 The `predev` / `prebuild` scripts copy the pdf.js worker that matches the installed `pdfjs-dist` into `public/pdf.worker.min.mjs`.
 
@@ -24,6 +24,16 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 - Progress is saved automatically for both formats; reopening a book resumes where you left off. Opening a Want to Read book moves it to Reading; reaching the end offers to mark it Finished.
 - **Backup** — export metadata as `library-backup-v2.json`, or everything including the PDF/EPUB files as a zip. Import restores a backup (v1 or v2) without overwriting books you already have.
 - **Sample books** — seven placeholder books with generated PDFs so the flow can be tried without your own files. No copyrighted PDFs are included.
+
+### Accounts and quotas
+
+| Env | Default | Meaning |
+| --- | --- | --- |
+| `SHELF_DATA_DIR` | `./.data` | SQLite file + uploaded files |
+| `SHELF_SESSION_SECRET` | — | Required in production, ≥ 32 chars |
+| `SHELF_USER_QUOTA_BYTES` | 250 MB | Per-account cap |
+| `SHELF_TOTAL_QUOTA_BYTES` | 10 GB | Whole-store cap |
+| `SHELF_REGISTRATION` | `open` | `closed` disables sign-up |
 
 ### Keyboard shortcuts in the reader
 
@@ -42,6 +52,8 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 ```
 src/
   app/                 routes (App Router)
+    api/               REST routes (auth, books, files, bookmarks, notes, collections, settings, library)
+    (auth)/            sign in / create account
     (shelf)/           shelf pages that share the header shell
     read/[id]/         distraction-free reader
   components/
@@ -52,8 +64,9 @@ src/
     settings/          settings page
     ui/                shadcn/ui primitives
   hooks/               useBooks, useBookmarks, useNotes, useReadingProgress, useCoverUrl…
+  server/              env, SQLite, auth/sessions, file store + quotas, user-scoped repo
   lib/
-    storage/           BookStorage interface + IndexedDB implementation
+    storage/           BookStorage interface + HTTP implementation
     pdf/               pdf.js setup, metadata, thumbnails, outline, text search, placeholder generator
     epub/              epub.js setup, metadata, cover, TOC, locations cache, text search
     backup/            versioned export / import (JSON and zip)
@@ -61,12 +74,14 @@ src/
   types/               data model
 ```
 
-The UI never touches IndexedDB directly. Everything goes through the `BookStorage` interface in `src/lib/storage/bookStorage.ts`; the IndexedDB implementation lives next to it and a SQLite-backed one could replace it without changing components or hooks. Storage changes are broadcast through a tiny event bus so hooks refresh automatically.
+The UI never talks to the API directly. Everything goes through the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `httpStorage.ts`. Storage changes are broadcast through a tiny event bus so hooks refresh automatically.
 
-Book files and cover thumbnails are stored as Blobs in dedicated object stores, never in `localStorage`. Shelf cards only load the small cover thumbnail; the full file is read only when the reader opens. The IndexedDB schema is versioned (currently v2) and migrates older libraries in place.
+**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting. Every table is scoped by `user_id` and every route resolves the session before touching data. Files are stored at `<SHELF_DATA_DIR>/users/<userId>/<bookId>.<pdf|epub>` and streamed back with HTTP Range support. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
+
+Shelf cards only load the small cover thumbnail; the full file is fetched only when the reader opens.
 
 Not supported: MOBI / AZW3 / KFX. Convert those to EPUB first (e.g. with Calibre).
 
 ## Stack
 
-Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide · react-pdf / pdf.js · epub.js · idb · fflate · sonner · next-themes
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide · react-pdf / pdf.js · epub.js · better-sqlite3 · zod · fflate · sonner · next-themes
