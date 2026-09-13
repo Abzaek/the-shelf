@@ -34,7 +34,7 @@ set -e
 # better-sqlite3 is a native module: swap in the Linux build kept at native/ (see deploy/README notes).
 NATIVE="$REMOTE_APP/native/node_modules/better-sqlite3"
 if [ -d "\$NATIVE" ]; then
-  TARGET=\$(find "$REMOTE_APP/releases/$RELEASE/node_modules" -maxdepth 3 -type d -name better-sqlite3 | head -1)
+  TARGET=\$(find "$REMOTE_APP/releases/$RELEASE/node_modules" -maxdepth 6 -type d -name better-sqlite3 | head -1)
   if [ -n "\$TARGET" ]; then rm -rf "\$TARGET" && cp -R "\$NATIVE" "\$TARGET"; fi
 fi
 [ -f "$REMOTE_APP/shelf.env" ] || { echo "Missing $REMOTE_APP/shelf.env (SHELF_SESSION_SECRET). Aborting."; exit 1; }
