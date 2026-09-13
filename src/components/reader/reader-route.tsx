@@ -9,8 +9,12 @@ import { useLibrary } from "@/components/library-provider";
 import { storage } from "@/lib/storage";
 import { ReaderLoading } from "./reader-loading";
 
-// pdf.js touches browser globals; keep the reader entirely client-side.
+// pdf.js and epub.js touch browser globals; keep both readers entirely client-side.
 const PdfReader = dynamic(() => import("./pdf-reader").then((m) => m.PdfReader), {
+  ssr: false,
+  loading: () => <ReaderLoading />,
+});
+const EpubReader = dynamic(() => import("./epub-reader").then((m) => m.EpubReader), {
   ssr: false,
   loading: () => <ReaderLoading />,
 });
@@ -18,20 +22,20 @@ const PdfReader = dynamic(() => import("./pdf-reader").then((m) => m.PdfReader),
 export function ReaderRoute({ bookId }: { bookId: string }) {
   const { books, booksLoading, settings, settingsLoaded } = useLibrary();
   const book = books.find((b) => b.id === bookId);
-  const [pdf, setPdf] = useState<Blob | null>(null);
+  const [file, setFile] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!book) return;
     let active = true;
     storage
-      .getPdf(book.pdfId)
-      .then((blob) => {
+      .getFile(book.fileId)
+      .then((blob: Blob | undefined) => {
         if (!active) return;
-        if (!blob) setError("The PDF file for this book is missing. Open the book's details and attach it again.");
-        else setPdf(blob);
+        if (!blob) setError("The file for this book is missing. Open the book's details and attach it again.");
+        else setFile(blob);
       })
-      .catch((err) => active && setError(err instanceof Error ? err.message : "Could not load the PDF."));
+      .catch((err: unknown) => active && setError(err instanceof Error ? err.message : "Could not load the book file."));
     return () => {
       active = false;
     };
@@ -55,7 +59,11 @@ export function ReaderRoute({ bookId }: { bookId: string }) {
     );
   }
 
-  if (!pdf) return <ReaderLoading title={book.title} />;
+  if (!file) return <ReaderLoading title={book.title} />;
 
-  return <PdfReader book={book} file={pdf} settings={settings} />;
+  return book.format === "epub" ? (
+    <EpubReader book={book} file={file} settings={settings} />
+  ) : (
+    <PdfReader book={book} file={file} settings={settings} />
+  );
 }

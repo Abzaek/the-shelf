@@ -370,6 +370,7 @@ export function PdfReader({ book, file, settings }: PdfReaderProps) {
     <div ref={rootRef} className="flex h-svh w-full flex-col overflow-hidden bg-background text-foreground">
       <ReaderToolbar
         title={book.title}
+        format="pdf"
         currentPage={currentPage}
         numPages={numPages}
         zoomPercent={zoomPercent}
@@ -435,6 +436,7 @@ export function PdfReader({ book, file, settings }: PdfReaderProps) {
           )}
 
           <MobileReaderBar
+            format="pdf"
             currentPage={currentPage}
             numPages={numPages}
             isBookmarked={isBookmarked(currentPage)}

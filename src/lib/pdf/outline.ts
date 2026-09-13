@@ -6,6 +6,8 @@ export interface TocEntry {
   id: string;
   title: string;
   page: number | null;
+  /** EPUB only: spine href to display. */
+  href?: string;
   depth: number;
 }
 

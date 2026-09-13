@@ -24,7 +24,8 @@ import { useBookmarks } from "@/hooks/use-bookmarks";
 import { useNotes } from "@/hooks/use-notes";
 import { storage } from "@/lib/storage";
 import { formatDate, formatRelative } from "@/lib/utils/format";
-import { READING_STATUSES, STATUS_LABELS, type ReadingStatus } from "@/types";
+import { lengthLabel } from "@/lib/utils/book-format";
+import { FORMAT_LABELS, READING_STATUSES, STATUS_LABELS, type ReadingStatus } from "@/types";
 import { BookCover } from "./book-cover";
 import { DeleteBookDialog } from "./delete-book-dialog";
 import { ProgressBar } from "./progress-bar";
@@ -66,7 +67,7 @@ export function BookDetailsDialog() {
   const inCollections = book ? collections.filter((c) => c.bookIds.includes(book.id)) : [];
   const hasStarted = !!book && (book.currentPage > 1 || book.status === "reading" || book.status === "paused");
   const readLabel = book?.status === "finished" ? "Read Again" : hasStarted ? "Continue Reading" : "Start Reading";
-  const pdfMissing = !!book && book.pdfSize === 0;
+  const pdfMissing = !!book && book.fileSize === 0;
 
   return (
     <>
@@ -81,6 +82,8 @@ export function BookDetailsDialog() {
               <div className="flex min-w-0 flex-col">
                 <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
                   <span>{book.category}</span>
+                  <span aria-hidden>·</span>
+                  <span className="rounded border border-border px-1.5 py-px text-[10.5px] font-medium tracking-wide">{FORMAT_LABELS[book.format]}</span>
                   <span aria-hidden>·</span>
                   <StatusBadge status={book.status} />
                 </div>
@@ -99,11 +102,12 @@ export function BookDetailsDialog() {
                         <>Finished {formatDate(book.finishedAt)}</>
                       ) : hasStarted ? (
                         <>
-                          Continue from page <span className="font-medium text-foreground tabular-nums">{book.currentPage}</span> of{" "}
+                          Continue from {book.format === "epub" ? "location" : "page"}{" "}
+                          <span className="font-medium text-foreground tabular-nums">{book.currentPage}</span> of{" "}
                           <span className="tabular-nums">{book.totalPages}</span>
                         </>
                       ) : (
-                        <>{book.totalPages} pages · not started</>
+                        <>{lengthLabel(book)} · not started</>
                       )}
                     </span>
                     <span className="font-medium tabular-nums text-brass">{book.progress}%</span>
@@ -146,7 +150,7 @@ export function BookDetailsDialog() {
                 </div>
                 {pdfMissing && (
                   <p className="mt-3 text-[13px] text-destructive">
-                    The PDF for this book is missing. Edit the book to attach it again.
+                    The file for this book is missing. Edit the book to attach it again.
                   </p>
                 )}
 
@@ -172,9 +176,9 @@ export function BookDetailsDialog() {
                     <dd className="mt-0.5 font-medium">{formatRelative(book.lastOpenedAt)}</dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">Pages read</dt>
+                    <dt className="text-muted-foreground">{book.format === "epub" ? "Locations read" : "Pages read"}</dt>
                     <dd className="mt-0.5 font-medium tabular-nums">
-                      {book.status === "finished" ? book.totalPages : Math.max(0, book.currentPage - 1)} / {book.totalPages}
+                      {book.status === "finished" ? book.totalPages : Math.max(0, book.currentPage - 1)} / {book.totalPages || "—"}
                     </dd>
                   </div>
                   <div>

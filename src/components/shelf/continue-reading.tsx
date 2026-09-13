@@ -6,6 +6,7 @@ import { BookCover } from "@/components/books/book-cover";
 import { ProgressBar } from "@/components/books/progress-bar";
 import { Button } from "@/components/ui/button";
 import type { Book } from "@/types";
+import { positionLabel } from "@/lib/utils/book-format";
 
 interface ContinueReadingProps {
   books: Book[];
@@ -47,9 +48,7 @@ export function ContinueReading({ books, onOpenDetails }: ContinueReadingProps) 
               <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">{book.author}</p>
               <div className="mt-auto space-y-2 pt-3">
                 <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-                  <span className="tabular-nums">
-                    Page {book.currentPage} / {book.totalPages}
-                  </span>
+                  <span className="tabular-nums">{positionLabel(book)}</span>
                   <span className="tabular-nums text-brass">{book.progress}%</span>
                 </div>
                 <ProgressBar value={book.progress} />

@@ -30,11 +30,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { ReadingMode } from "@/types";
+import type { BookFormat, ReadingMode } from "@/types";
 import type { SidebarTab, ZoomState } from "./reader-types";
 
 export interface ReaderToolbarProps {
   title: string;
+  format: BookFormat;
   currentPage: number;
   numPages: number;
   zoomPercent: number;
@@ -80,7 +81,7 @@ function IconButton({ label, shortcut, onClick, children, className, pressed, di
   );
 }
 
-export function PageInput({ currentPage, numPages, onPageChange, compact }: { currentPage: number; numPages: number; onPageChange: (p: number) => void; compact?: boolean }) {
+export function PageInput({ currentPage, numPages, onPageChange, compact, unit = "page" }: { currentPage: number; numPages: number; onPageChange: (p: number) => void; compact?: boolean; unit?: string }) {
   const [draft, setDraft] = useState(String(currentPage));
   const [seenPage, setSeenPage] = useState(currentPage);
   if (seenPage !== currentPage) {
@@ -99,7 +100,7 @@ export function PageInput({ currentPage, numPages, onPageChange, compact }: { cu
   return (
     <form onSubmit={submit} className="flex items-center gap-1 text-[13px] tabular-nums text-muted-foreground">
       <label htmlFor="reader-page-input" className="sr-only">
-        Go to page
+        Go to {unit}
       </label>
       <input
         id="reader-page-input"
@@ -124,11 +125,12 @@ export function PageInput({ currentPage, numPages, onPageChange, compact }: { cu
 
 export function ReaderToolbar(props: ReaderToolbarProps) {
   const {
-    title, currentPage, numPages, zoomPercent, zoom, readingMode, sidebarOpen, isFullscreen, isBookmarked, isFinished,
+    title, format, currentPage, numPages, zoomPercent, zoom, readingMode, sidebarOpen, isFullscreen, isBookmarked, isFinished,
     onPageChange, onStep, onZoomIn, onZoomOut, onZoomPreset, onReadingMode, onToggleSidebar, onToggleFullscreen, onToggleBookmark, onMarkFinished,
   } = props;
 
   const zoomValue = zoom.mode === "custom" ? "custom" : zoom.mode;
+  const isEpub = format === "epub";
 
   return (
     <header className="z-20 flex h-12 shrink-0 items-center gap-1 border-b border-border/70 bg-background/90 px-2 backdrop-blur-md sm:gap-2 sm:px-3">
@@ -147,7 +149,7 @@ export function ReaderToolbar(props: ReaderToolbarProps) {
         <IconButton label="Previous page" shortcut="←" onClick={() => onStep(-1)} disabled={currentPage <= 1}>
           <ChevronLeft aria-hidden />
         </IconButton>
-        <PageInput currentPage={currentPage} numPages={numPages} onPageChange={onPageChange} />
+        <PageInput currentPage={currentPage} numPages={numPages} onPageChange={onPageChange} unit={isEpub ? "location" : "page"} />
         <IconButton label="Next page" shortcut="→" onClick={() => onStep(1)} disabled={currentPage >= numPages}>
           <ChevronRight aria-hidden />
         </IconButton>
@@ -156,34 +158,39 @@ export function ReaderToolbar(props: ReaderToolbarProps) {
           <Search aria-hidden />
         </IconButton>
         <div className="mx-1.5 h-5 w-px bg-border" aria-hidden />
-        <IconButton label="Zoom out" shortcut="⌘−" onClick={onZoomOut}>
+        <IconButton label={isEpub ? "Smaller text" : "Zoom out"} shortcut="⌘−" onClick={onZoomOut}>
           <ZoomOut aria-hidden />
         </IconButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-16 tabular-nums text-[12.5px] text-muted-foreground" aria-label={`Zoom ${zoomPercent}%. Choose zoom`}>
+            <Button variant="ghost" size="sm" className="w-16 tabular-nums text-[12.5px] text-muted-foreground" aria-label={`${isEpub ? "Text size" : "Zoom"} ${zoomPercent}%. Choose ${isEpub ? "text size" : "zoom"}`}>
               {zoomPercent}%
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup
-              value={zoomValue}
-              onValueChange={(v) => {
-                if (v === "fit-width" || v === "fit-page") onZoomPreset({ mode: v });
-              }}
-            >
-              <DropdownMenuRadioItem value="fit-width">Fit width</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="fit-page">Fit page</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            {[0.75, 1, 1.25, 1.5, 2].map((s) => (
+            {!isEpub && (
+              <>
+                <DropdownMenuRadioGroup
+                  value={zoomValue}
+                  onValueChange={(v) => {
+                    if (v === "fit-width" || v === "fit-page") onZoomPreset({ mode: v });
+                  }}
+                >
+                  <DropdownMenuRadioItem value="fit-width">Fit width</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="fit-page">Fit page</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {isEpub && <DropdownMenuLabel>Text size</DropdownMenuLabel>}
+            {(isEpub ? [0.8, 0.9, 1, 1.15, 1.3, 1.5] : [0.75, 1, 1.25, 1.5, 2]).map((s) => (
               <DropdownMenuItem key={s} onSelect={() => onZoomPreset({ mode: "custom", scale: s })}>
                 {Math.round(s * 100)}%
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <IconButton label="Zoom in" shortcut="⌘+" onClick={onZoomIn}>
+        <IconButton label={isEpub ? "Larger text" : "Zoom in"} shortcut="⌘+" onClick={onZoomIn}>
           <ZoomIn aria-hidden />
         </IconButton>
         <div className="mx-1.5 h-5 w-px bg-border" aria-hidden />
@@ -205,7 +212,7 @@ export function ReaderToolbar(props: ReaderToolbarProps) {
           <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuLabel>Reading mode</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={readingMode} onValueChange={(v) => onReadingMode(v as ReadingMode)}>
-              <DropdownMenuRadioItem value="single">Single page</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="single">{isEpub ? "Paginated" : "Single page"}</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="continuous">Continuous scroll</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
@@ -226,7 +233,7 @@ export function ReaderToolbar(props: ReaderToolbarProps) {
 
       {/* Mobile: just the page indicator; the rest lives in the floating bar */}
       <div className="md:hidden">
-        <PageInput currentPage={currentPage} numPages={numPages} onPageChange={onPageChange} compact />
+        <PageInput currentPage={currentPage} numPages={numPages} onPageChange={onPageChange} compact unit={isEpub ? "location" : "page"} />
       </div>
     </header>
   );
@@ -235,9 +242,10 @@ export function ReaderToolbar(props: ReaderToolbarProps) {
 /** Compact floating toolbar for small screens. */
 export function MobileReaderBar(props: Pick<
   ReaderToolbarProps,
-  "currentPage" | "numPages" | "onPageChange" | "onStep" | "onToggleSidebar" | "onToggleBookmark" | "isBookmarked" | "onZoomIn" | "onZoomOut" | "onZoomPreset" | "readingMode" | "onReadingMode" | "onToggleFullscreen" | "isFullscreen" | "onMarkFinished" | "isFinished"
+  "format" | "currentPage" | "numPages" | "onPageChange" | "onStep" | "onToggleSidebar" | "onToggleBookmark" | "isBookmarked" | "onZoomIn" | "onZoomOut" | "onZoomPreset" | "readingMode" | "onReadingMode" | "onToggleFullscreen" | "isFullscreen" | "onMarkFinished" | "isFinished"
 >) {
-  const { currentPage, numPages, onStep, onToggleSidebar, onToggleBookmark, isBookmarked, onZoomIn, onZoomOut, onZoomPreset, readingMode, onReadingMode, onToggleFullscreen, isFullscreen, onMarkFinished, isFinished } = props;
+  const { format, currentPage, numPages, onStep, onToggleSidebar, onToggleBookmark, isBookmarked, onZoomIn, onZoomOut, onZoomPreset, readingMode, onReadingMode, onToggleFullscreen, isFullscreen, onMarkFinished, isFinished } = props;
+  const isEpub = format === "epub";
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
       <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border bg-popover/95 p-1 shadow-xl backdrop-blur">
@@ -260,13 +268,13 @@ export function MobileReaderBar(props: Pick<
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" className="min-w-52">
-            <DropdownMenuItem onSelect={onZoomIn}><ZoomIn aria-hidden /> Zoom in</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onZoomOut}><ZoomOut aria-hidden /> Zoom out</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onZoomPreset({ mode: "fit-width" })}>Fit width</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onZoomPreset({ mode: "fit-page" })}>Fit page</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onZoomIn}><ZoomIn aria-hidden /> {isEpub ? "Larger text" : "Zoom in"}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onZoomOut}><ZoomOut aria-hidden /> {isEpub ? "Smaller text" : "Zoom out"}</DropdownMenuItem>
+            {!isEpub && <DropdownMenuItem onSelect={() => onZoomPreset({ mode: "fit-width" })}>Fit width</DropdownMenuItem>}
+            {!isEpub && <DropdownMenuItem onSelect={() => onZoomPreset({ mode: "fit-page" })}>Fit page</DropdownMenuItem>}
             <DropdownMenuSeparator />
             <DropdownMenuRadioGroup value={readingMode} onValueChange={(v) => onReadingMode(v as ReadingMode)}>
-              <DropdownMenuRadioItem value="single">Single page</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="single">{isEpub ? "Paginated" : "Single page"}</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="continuous">Continuous scroll</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />

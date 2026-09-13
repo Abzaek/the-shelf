@@ -9,7 +9,8 @@ import { useLibrary } from "@/components/library-provider";
 import { useBook } from "@/hooks/use-books";
 import { storage } from "@/lib/storage";
 import { formatBytes } from "@/lib/utils/format";
-import { DEFAULT_CATEGORIES, type Book } from "@/types";
+import { DEFAULT_CATEGORIES, FORMAT_LABELS, type Book } from "@/types";
+import { BOOK_FILE_ACCEPT, detectFormat, lengthLabel } from "@/lib/utils/book-format";
 import { BookFormFields, type BookFormValues } from "./book-form";
 import { CoverPicker } from "./cover-picker";
 
@@ -66,24 +67,41 @@ function EditBookForm({ book, onClose }: { book: Book; onClose: () => void }) {
     }
   };
 
-  const attachPdf = async (file: File | undefined) => {
+  const attachFile = async (file: File | undefined) => {
     if (!file) return;
+    const format = detectFormat(file);
+    if (!format) {
+      toast.error("Only PDF and EPUB files are supported.");
+      return;
+    }
+    if (format !== book.format) {
+      toast.error(`This book is ${FORMAT_LABELS[book.format]}. Add a new book for a different format.`);
+      return;
+    }
     setAttaching(true);
     try {
-      const { loadPdfDocument, destroyPdfDocument } = await import("@/lib/pdf/pdfjs");
-      const doc = await loadPdfDocument(file);
-      const pages = doc.numPages;
+      let pages = 0;
       let thumb: Blob | null = null;
-      if (!book.coverId) {
-        const { renderPageToBlob } = await import("@/lib/pdf/thumbnail");
-        thumb = await renderPageToBlob(doc, 1, 480).catch(() => null);
+      if (format === "pdf") {
+        const { loadPdfDocument, destroyPdfDocument } = await import("@/lib/pdf/pdfjs");
+        const doc = await loadPdfDocument(file);
+        pages = doc.numPages;
+        if (!book.coverId) {
+          const { renderPageToBlob } = await import("@/lib/pdf/thumbnail");
+          thumb = await renderPageToBlob(doc, 1, 480).catch(() => null);
+        }
+        await destroyPdfDocument(doc);
+      } else {
+        const { openEpub, extractEpubCover } = await import("@/lib/epub/epub");
+        const epub = await openEpub(file);
+        if (!book.coverId) thumb = await extractEpubCover(epub);
+        epub.destroy();
       }
-      await destroyPdfDocument(doc);
-      await storage.setPdf(book.id, file, file.name, pages);
+      await storage.setFile(book.id, file, file.name, pages);
       if (thumb) await storage.setCover(book.id, thumb, "generated");
-      toast.success("PDF attached");
+      toast.success(`${FORMAT_LABELS[format]} attached`);
     } catch (err) {
-      toast.error("Could not open that PDF", { description: err instanceof Error ? err.message : undefined });
+      toast.error("Could not open that file", { description: err instanceof Error ? err.message : undefined });
     } finally {
       setAttaching(false);
     }
@@ -110,32 +128,32 @@ function EditBookForm({ book, onClose }: { book: Book; onClose: () => void }) {
             }}
           />
           <div className="space-y-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-            {book.pdfSize > 0 ? (
+            {book.fileSize > 0 ? (
               <>
-                <p className="truncate font-medium text-foreground" title={book.pdfName}>{book.pdfName}</p>
+                <p className="truncate font-medium text-foreground" title={book.fileName}>{book.fileName}</p>
                 <p>
-                  {book.totalPages} pages · {formatBytes(book.pdfSize)}
+                  {FORMAT_LABELS[book.format]} · {lengthLabel(book)} · {formatBytes(book.fileSize)}
                 </p>
               </>
             ) : (
               <>
-                <p className="font-medium text-destructive">PDF file missing</p>
+                <p className="font-medium text-destructive">{FORMAT_LABELS[book.format]} file missing</p>
                 <p>This book was restored without its file.</p>
               </>
             )}
             <input
               ref={pdfInputRef}
               type="file"
-              accept="application/pdf,.pdf"
+              accept={BOOK_FILE_ACCEPT}
               className="sr-only"
-              aria-label="Attach or replace the PDF file"
+              aria-label="Attach or replace the book file"
               onChange={(e) => {
-                void attachPdf(e.target.files?.[0]);
+                void attachFile(e.target.files?.[0]);
                 e.target.value = "";
               }}
             />
             <Button type="button" variant="outline" size="xs" onClick={() => pdfInputRef.current?.click()} disabled={attaching}>
-              <FileUp aria-hidden data-icon="inline-start" /> {attaching ? "Opening…" : book.pdfSize > 0 ? "Replace PDF" : "Attach PDF"}
+              <FileUp aria-hidden data-icon="inline-start" /> {attaching ? "Opening…" : book.fileSize > 0 ? `Replace ${FORMAT_LABELS[book.format]}` : `Attach ${FORMAT_LABELS[book.format]}`}
             </Button>
           </div>
         </div>

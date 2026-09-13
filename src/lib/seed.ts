@@ -119,8 +119,9 @@ export async function addSampleBooks(onProgress?: (done: number, total: number) 
       status: seed.status,
       totalPages: seed.pages,
       currentPage: seed.currentPage ?? 1,
-      pdf,
-      pdfName: `${seed.title}.pdf`,
+      format: "pdf",
+      file: pdf,
+      fileName: `${seed.title}.pdf`,
       cover,
       coverKind: "generated",
     });

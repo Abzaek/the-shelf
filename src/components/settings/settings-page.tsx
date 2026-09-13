@@ -96,7 +96,7 @@ export function SettingsPage() {
     try {
       const { blob, fileName } = await exportLibraryZip((done, total) => setZipProgress({ done, total }));
       downloadBlob(blob, fileName);
-      toast.success("Library and PDFs exported", { description: `${fileName} · ${formatBytes(blob.size)}` });
+      toast.success("Library and files exported", { description: `${fileName} · ${formatBytes(blob.size)}` });
     } catch (err) {
       toast.error("Export failed", { description: err instanceof Error ? err.message : undefined });
     } finally {
@@ -122,7 +122,7 @@ export function SettingsPage() {
       toast.success(`Imported ${summary.booksAdded} ${summary.booksAdded === 1 ? "book" : "books"}`, {
         description: [
           summary.booksSkipped ? `${summary.booksSkipped} already on your shelf` : null,
-          summary.booksWithoutPdf ? `${summary.booksWithoutPdf} without a PDF file` : null,
+          summary.booksWithoutFile ? `${summary.booksWithoutFile} without a book file` : null,
           `${summary.bookmarksAdded} bookmarks · ${summary.notesAdded} notes · ${summary.collectionsAdded} collections`,
         ]
           .filter(Boolean)
@@ -228,7 +228,7 @@ export function SettingsPage() {
             <Download aria-hidden data-icon="inline-start" /> {exporting === "json" ? "Exporting…" : "Export JSON"}
           </Button>
         </Row>
-        <Row label="Export with PDFs" description="A full backup, including every PDF file, as a zip.">
+        <Row label="Export with files" description="A full backup, including every PDF and EPUB, as a zip.">
           <Button variant="outline" onClick={exportZip} disabled={!!exporting || stats.total === 0}>
             <FileArchive aria-hidden data-icon="inline-start" />
             {exporting === "zip" && zipProgress ? `Packing ${zipProgress.done}/${zipProgress.total}…` : "Export zip"}
@@ -273,7 +273,7 @@ export function SettingsPage() {
                   Exported {pendingImport ? new Date(pendingImport.backup.exportedAt).toLocaleString() : ""}.
                 </p>
                 <ul className="list-disc pl-5">
-                  <li>{pendingImport?.backup.books.length ?? 0} books{pendingImport?.pdfs.size ? ` (${pendingImport.pdfs.size} with PDF files)` : " (metadata only)"}</li>
+                  <li>{pendingImport?.backup.books.length ?? 0} books{pendingImport?.files.size ? ` (${pendingImport.files.size} with book files)` : " (metadata only)"}</li>
                   <li>{pendingImport?.backup.bookmarks.length ?? 0} bookmarks · {pendingImport?.backup.notes.length ?? 0} notes</li>
                   <li>{pendingImport?.backup.collections.length ?? 0} collections</li>
                 </ul>

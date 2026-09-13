@@ -5,6 +5,8 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 export interface SearchMatch {
   id: string;
   page: number;
+  /** EPUB only: exact CFI of the match. */
+  cfi?: string;
   /** Snippet with the match roughly centred. */
   before: string;
   match: string;

@@ -24,8 +24,19 @@ export const DEFAULT_CATEGORIES = [
   "Other",
 ] as const;
 
+export type BookFormat = "pdf" | "epub";
+
+export const FORMAT_LABELS: Record<BookFormat, string> = { pdf: "PDF", epub: "EPUB" };
+
+/** Accepted upload types per format. */
+export const FORMAT_ACCEPT: Record<BookFormat, { mime: string[]; ext: string }> = {
+  pdf: { mime: ["application/pdf"], ext: ".pdf" },
+  epub: { mime: ["application/epub+zip", "application/epub"], ext: ".epub" },
+};
+
 export interface Book {
   id: string;
+  format: BookFormat;
   title: string;
   author: string;
   description: string;
@@ -35,12 +46,16 @@ export interface Book {
   /** Key into the covers blob store, or null when no cover exists yet. */
   coverId: string | null;
   coverKind: "custom" | "generated" | "none";
-  /** Key into the pdfs blob store. */
-  pdfId: string;
-  pdfName: string;
-  pdfSize: number;
+  /** Key into the files blob store (PDF or EPUB). */
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  /** PDF: page count. EPUB: number of generated locations (0 until first open). */
   totalPages: number;
+  /** PDF: 1-based page. EPUB: 1-based location index. */
   currentPage: number;
+  /** EPUB only: exact CFI to resume from. */
+  currentCfi: string | null;
   /** 0–100 */
   progress: number;
   createdAt: string;
@@ -54,9 +69,10 @@ export type NewBookInput = Omit<
   | "id"
   | "coverId"
   | "coverKind"
-  | "pdfId"
-  | "pdfName"
-  | "pdfSize"
+  | "fileId"
+  | "fileName"
+  | "fileSize"
+  | "currentCfi"
   | "createdAt"
   | "updatedAt"
   | "lastOpenedAt"
@@ -64,8 +80,8 @@ export type NewBookInput = Omit<
   | "progress"
   | "currentPage"
 > & {
-  pdf: Blob;
-  pdfName: string;
+  file: Blob;
+  fileName: string;
   cover?: Blob | null;
   coverKind?: Book["coverKind"];
   currentPage?: number;
@@ -74,7 +90,10 @@ export type NewBookInput = Omit<
 export interface Bookmark {
   id: string;
   bookId: string;
+  /** PDF page or EPUB location index (1-based). */
   page: number;
+  /** EPUB only: exact CFI. */
+  cfi?: string;
   label: string;
   createdAt: string;
 }
@@ -83,6 +102,7 @@ export interface Note {
   id: string;
   bookId: string;
   page: number;
+  cfi?: string;
   content: string;
   createdAt: string;
   updatedAt: string;
@@ -119,6 +139,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface ReadingProgressUpdate {
   currentPage: number;
   totalPages: number;
+  currentCfi?: string | null;
 }
 
 export interface LibraryStats {
@@ -128,24 +149,34 @@ export interface LibraryStats {
   wantToRead: number;
 }
 
-/** Versioned backup format — library-backup-v1.json */
-export interface LibraryBackupV1 {
+/** Versioned backup format — library-backup-v2.json (v1 files are still importable). */
+export interface LibraryBackup {
   format: "the-shelf-library";
-  version: 1;
+  version: 2;
   exportedAt: string;
   books: Book[];
   bookmarks: Bookmark[];
   notes: Note[];
   collections: Collection[];
   settings: Settings;
-  /** Present when PDFs/covers were exported alongside (zip). */
+  /** Present when book files/covers were exported alongside (zip). */
   includesFiles: boolean;
 }
+
+/** Shape of the original v1 export, accepted by the importer. */
+export type LibraryBackupV1 = Omit<LibraryBackup, "version" | "books"> & {
+  version: 1;
+  books: Array<Omit<Book, "format" | "fileId" | "fileName" | "fileSize" | "currentCfi"> & {
+    pdfId: string;
+    pdfName: string;
+    pdfSize: number;
+  }>;
+};
 
 export interface ImportSummary {
   booksAdded: number;
   booksSkipped: number;
-  booksWithoutPdf: number;
+  booksWithoutFile: number;
   bookmarksAdded: number;
   notesAdded: number;
   collectionsAdded: number;

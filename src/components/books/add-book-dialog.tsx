@@ -19,7 +19,8 @@ import { extractPdfMetadata } from "@/lib/pdf/metadata";
 import { renderPageToBlob } from "@/lib/pdf/thumbnail";
 import { formatBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
-import { DEFAULT_CATEGORIES } from "@/types";
+import { DEFAULT_CATEGORIES, FORMAT_LABELS, type BookFormat } from "@/types";
+import { BOOK_FILE_ACCEPT, detectFormat } from "@/lib/utils/book-format";
 import { BookFormFields, type BookFormValues } from "./book-form";
 import { CoverPicker } from "./cover-picker";
 
@@ -31,6 +32,7 @@ export function AddBookDialog() {
   const { addBookOpen, setAddBookOpen, openBook, settings, updateSettings } = useLibrary();
   const [step, setStep] = useState<Step>("drop");
   const [file, setFile] = useState<File | null>(null);
+  const [format, setFormat] = useState<BookFormat>("pdf");
   const [totalPages, setTotalPages] = useState(0);
   const [values, setValues] = useState<BookFormValues>(EMPTY);
   const [generatedCover, setGeneratedCover] = useState<Blob | null>(null);
@@ -61,29 +63,47 @@ export function AddBookDialog() {
   }, [addBookOpen, reset]);
 
   const processFile = useCallback(async (picked: File) => {
-    if (!(picked.type === "application/pdf" || /\.pdf$/i.test(picked.name))) {
-      setError("Only PDF files can be added to the shelf.");
+    const detected = detectFormat(picked);
+    if (!detected) {
+      setError("Only PDF and EPUB files can be added to the shelf.");
       return;
     }
     setError(null);
     setFile(picked);
+    setFormat(detected);
     setStep("processing");
     try {
-      const doc = await loadPdfDocument(picked);
-      try {
-        const meta = await extractPdfMetadata(doc, picked.name);
-        setTotalPages(meta.totalPages);
-        setValues((v) => ({ ...v, title: meta.title, author: meta.author }));
+      if (detected === "pdf") {
+        const doc = await loadPdfDocument(picked);
         try {
-          const thumb = await renderPageToBlob(doc, 1, 480);
-          setGeneratedCover(thumb);
-          setCover(thumb);
-          setCoverKind("generated");
-        } catch {
-          setGeneratedCover(null);
+          const meta = await extractPdfMetadata(doc, picked.name);
+          setTotalPages(meta.totalPages);
+          setValues((v) => ({ ...v, title: meta.title, author: meta.author }));
+          try {
+            const thumb = await renderPageToBlob(doc, 1, 480);
+            setGeneratedCover(thumb);
+            setCover(thumb);
+            setCoverKind("generated");
+          } catch {
+            setGeneratedCover(null);
+          }
+        } finally {
+          await destroyPdfDocument(doc);
         }
-      } finally {
-        await destroyPdfDocument(doc);
+      } else {
+        const { openEpub, extractEpubMetadata, extractEpubCover } = await import("@/lib/epub/epub");
+        const epub = await openEpub(picked);
+        try {
+          const meta = await extractEpubMetadata(epub, picked.name);
+          setTotalPages(0); // locations are generated on first open
+          setValues((v) => ({ ...v, title: meta.title, author: meta.author, description: meta.description }));
+          const coverBlob = await extractEpubCover(epub);
+          setGeneratedCover(coverBlob);
+          setCover(coverBlob);
+          setCoverKind(coverBlob ? "generated" : "none");
+        } finally {
+          epub.destroy();
+        }
       }
       setStep("details");
     } catch (err) {
@@ -92,8 +112,8 @@ export function AddBookDialog() {
       setFile(null);
       setError(
         err instanceof Error && /password/i.test(err.message)
-          ? "This PDF is password-protected and cannot be opened."
-          : "This file could not be opened as a PDF. It may be damaged.",
+          ? "This file is password-protected and cannot be opened."
+          : `This file could not be opened as ${detected === "pdf" ? "a PDF" : "an EPUB"}. It may be damaged.`,
       );
     }
   }, []);
@@ -113,9 +133,10 @@ export function AddBookDialog() {
       const book = await storage.addBook({
         ...values,
         category,
+        format,
         totalPages,
-        pdf: file,
-        pdfName: file.name,
+        file,
+        fileName: file.name,
         cover,
         coverKind,
       });
@@ -147,7 +168,7 @@ export function AddBookDialog() {
           <DialogDescription>
             {step === "details"
               ? "Check the details before it goes on the shelf."
-              : "Add a PDF you own. It stays on this device."}
+              : "Add a PDF or EPUB you own. It stays on this device."}
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +177,7 @@ export function AddBookDialog() {
             <div
               role="button"
               tabIndex={0}
-              aria-label="Drop a PDF here or press Enter to choose a file"
+              aria-label="Drop a PDF or EPUB here or press Enter to choose a file"
               aria-busy={step === "processing"}
               onClick={() => step === "drop" && inputRef.current?.click()}
               onKeyDown={(e) => {
@@ -182,12 +203,12 @@ export function AddBookDialog() {
                 <>
                   <FileText className="size-8 animate-pulse text-brass" strokeWidth={1.5} aria-hidden />
                   <p className="font-serif text-lg">Reading {file?.name}</p>
-                  <p className="text-sm text-muted-foreground">Extracting details and the first page…</p>
+                  <p className="text-sm text-muted-foreground">Extracting details and the cover…</p>
                 </>
               ) : (
                 <>
                   <Upload className="size-8 text-muted-foreground" strokeWidth={1.5} aria-hidden />
-                  <p className="font-serif text-lg">Drag your PDF here</p>
+                  <p className="font-serif text-lg">Drag your PDF or EPUB here</p>
                   <p className="text-sm text-muted-foreground">or</p>
                   <Button
                     type="button"
@@ -197,14 +218,14 @@ export function AddBookDialog() {
                       inputRef.current?.click();
                     }}
                   >
-                    Choose PDF
+                    Choose file
                   </Button>
                 </>
               )}
               <input
                 ref={inputRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept={BOOK_FILE_ACCEPT}
                 className="sr-only"
                 tabIndex={-1}
                 onChange={(e) => {
@@ -245,7 +266,7 @@ export function AddBookDialog() {
                 <div className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                   <p className="truncate font-medium text-foreground" title={file.name}>{file.name}</p>
                   <p>
-                    {totalPages} pages · {formatBytes(file.size)}
+                    {FORMAT_LABELS[format]} · {format === "pdf" ? `${totalPages} pages · ` : ""}{formatBytes(file.size)}
                   </p>
                 </div>
               </div>

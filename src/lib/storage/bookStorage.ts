@@ -3,6 +3,7 @@ import type {
   Bookmark,
   Collection,
   ImportSummary,
+  LibraryBackup,
   LibraryBackupV1,
   NewBookInput,
   Note,
@@ -27,17 +28,22 @@ export interface BookStorage {
   saveProgress(id: string, progress: ReadingProgressUpdate): Promise<Book>;
 
   // Files
-  getPdf(pdfId: string): Promise<Blob | undefined>;
+  getFile(fileId: string): Promise<Blob | undefined>;
+  setFile(bookId: string, file: Blob, fileName: string, totalPages: number): Promise<Book>;
   getCover(coverId: string): Promise<Blob | undefined>;
   setCover(bookId: string, cover: Blob | null, kind: Book["coverKind"]): Promise<Book>;
 
+  // EPUB location cache
+  getLocations(bookId: string): Promise<string | undefined>;
+  setLocations(bookId: string, json: string): Promise<void>;
+
   // Bookmarks
-  addBookmark(bookId: string, page: number, label?: string): Promise<Bookmark>;
+  addBookmark(bookId: string, page: number, label?: string, cfi?: string): Promise<Bookmark>;
   removeBookmark(id: string): Promise<void>;
   getBookmarks(bookId: string): Promise<Bookmark[]>;
 
   // Notes
-  addNote(bookId: string, page: number, content: string): Promise<Note>;
+  addNote(bookId: string, page: number, content: string, cfi?: string): Promise<Note>;
   updateNote(id: string, content: string): Promise<Note>;
   deleteNote(id: string): Promise<void>;
   getNotes(bookId: string): Promise<Note[]>;
@@ -54,10 +60,10 @@ export interface BookStorage {
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
 
   // Backup
-  exportLibrary(): Promise<LibraryBackupV1>;
+  exportLibrary(): Promise<LibraryBackup>;
   importLibrary(
-    backup: LibraryBackupV1,
-    files: { pdfs: Map<string, Blob>; covers: Map<string, Blob> },
+    backup: LibraryBackup | LibraryBackupV1,
+    files: { files: Map<string, Blob>; covers: Map<string, Blob> },
   ): Promise<ImportSummary>;
   clearLibrary(): Promise<void>;
 }

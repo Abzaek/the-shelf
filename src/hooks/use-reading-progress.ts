@@ -8,7 +8,7 @@ import { storage } from "@/lib/storage";
  * and flushes immediately on unmount / tab hide so nothing is lost.
  */
 export function useReadingProgress(bookId: string | undefined, delay = 600) {
-  const pending = useRef<{ currentPage: number; totalPages: number } | null>(null);
+  const pending = useRef<{ currentPage: number; totalPages: number; currentCfi?: string | null } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flush = useCallback(() => {
@@ -25,8 +25,8 @@ export function useReadingProgress(bookId: string | undefined, delay = 600) {
   }, [bookId]);
 
   const saveProgress = useCallback(
-    (currentPage: number, totalPages: number) => {
-      pending.current = { currentPage, totalPages };
+    (currentPage: number, totalPages: number, currentCfi?: string | null) => {
+      pending.current = { currentPage, totalPages, ...(currentCfi !== undefined ? { currentCfi } : {}) };
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(flush, delay);
     },

@@ -3,6 +3,7 @@ import type {
   Bookmark,
   Collection,
   ImportSummary,
+  LibraryBackup,
   LibraryBackupV1,
   NewBookInput,
   Note,
@@ -20,6 +21,23 @@ const SETTINGS_KEY = "app";
 
 function now(): string {
   return new Date().toISOString();
+}
+
+/** Accepts a v1 (pdfId/pdfName/pdfSize) or v2 book record and returns a v2 Book. */
+function normalizeImportedBook(raw: LibraryBackup["books"][number] | LibraryBackupV1["books"][number]): Book {
+  const legacy = raw as Partial<Book> & { pdfId?: string; pdfName?: string; pdfSize?: number };
+  const book: Book = {
+    ...(raw as Book),
+    format: legacy.format ?? "pdf",
+    fileId: legacy.fileId ?? legacy.pdfId ?? raw.id,
+    fileName: legacy.fileName ?? legacy.pdfName ?? "",
+    fileSize: legacy.fileSize ?? legacy.pdfSize ?? 0,
+    currentCfi: legacy.currentCfi ?? null,
+  };
+  delete (book as { pdfId?: string }).pdfId;
+  delete (book as { pdfName?: string }).pdfName;
+  delete (book as { pdfSize?: number }).pdfSize;
+  return book;
 }
 
 function normalizeKey(title: string, author: string): string {
@@ -41,6 +59,7 @@ export class IndexedDbBookStorage implements BookStorage {
 
     const book: Book = {
       id,
+      format: input.format,
       title: input.title.trim(),
       author: input.author.trim(),
       description: input.description.trim(),
@@ -49,11 +68,12 @@ export class IndexedDbBookStorage implements BookStorage {
       status: input.status,
       coverId: hasCover ? id : null,
       coverKind: hasCover ? input.coverKind ?? "generated" : "none",
-      pdfId: id,
-      pdfName: input.pdfName,
-      pdfSize: input.pdf.size,
+      fileId: id,
+      fileName: input.fileName,
+      fileSize: input.file.size,
       totalPages: input.totalPages,
       currentPage,
+      currentCfi: null,
       progress: input.status === "finished" ? 100 : computeProgress(currentPage, input.totalPages),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -61,10 +81,10 @@ export class IndexedDbBookStorage implements BookStorage {
       finishedAt: input.status === "finished" ? timestamp : null,
     };
 
-    const tx = db.transaction(["books", "pdfs", "covers"], "readwrite");
+    const tx = db.transaction(["books", "files", "covers"], "readwrite");
     await Promise.all([
       tx.objectStore("books").put(book),
-      tx.objectStore("pdfs").put(input.pdf, id),
+      tx.objectStore("files").put(input.file, id),
       hasCover ? tx.objectStore("covers").put(input.cover as Blob, id) : Promise.resolve(),
       tx.done,
     ]);
@@ -101,6 +121,7 @@ export class IndexedDbBookStorage implements BookStorage {
         if (existing.status === "finished") {
           // Re-opening a finished book: start from the beginning.
           next.currentPage = 1;
+          next.currentCfi = null;
           next.progress = 0;
         } else {
           next.progress = computeProgress(next.currentPage, next.totalPages);
@@ -116,7 +137,7 @@ export class IndexedDbBookStorage implements BookStorage {
   async deleteBook(id: string): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(
-      ["books", "pdfs", "covers", "bookmarks", "notes", "collections"],
+      ["books", "files", "covers", "locations", "bookmarks", "notes", "collections"],
       "readwrite",
     );
     const bookmarks = await tx.objectStore("bookmarks").index("by-book").getAllKeys(id);
@@ -125,8 +146,9 @@ export class IndexedDbBookStorage implements BookStorage {
 
     const ops: Promise<unknown>[] = [
       tx.objectStore("books").delete(id),
-      tx.objectStore("pdfs").delete(id),
+      tx.objectStore("files").delete(id),
       tx.objectStore("covers").delete(id),
+      tx.objectStore("locations").delete(id),
       ...bookmarks.map((k) => tx.objectStore("bookmarks").delete(k)),
       ...notes.map((k) => tx.objectStore("notes").delete(k)),
     ];
@@ -145,7 +167,7 @@ export class IndexedDbBookStorage implements BookStorage {
     storageEvents.emit("collections");
   }
 
-  async saveProgress(id: string, { currentPage, totalPages }: ReadingProgressUpdate): Promise<Book> {
+  async saveProgress(id: string, { currentPage, totalPages, currentCfi }: ReadingProgressUpdate): Promise<Book> {
     const db = await getDB();
     const existing = await db.get("books", id);
     if (!existing) throw new Error("Book not found.");
@@ -156,6 +178,7 @@ export class IndexedDbBookStorage implements BookStorage {
       ...existing,
       totalPages: total,
       currentPage: page,
+      currentCfi: currentCfi === undefined ? existing.currentCfi : currentCfi,
       progress: existing.status === "finished" ? 100 : computeProgress(page, total),
       lastOpenedAt: now(),
       updatedAt: now(),
@@ -170,27 +193,42 @@ export class IndexedDbBookStorage implements BookStorage {
 
   // ---------------------------------------------------------------- Files
 
-  async getPdf(pdfId: string): Promise<Blob | undefined> {
+  async getFile(fileId: string): Promise<Blob | undefined> {
     const db = await getDB();
-    return db.get("pdfs", pdfId);
+    return db.get("files", fileId);
   }
 
-  async setPdf(bookId: string, pdf: Blob, pdfName: string, totalPages: number): Promise<Book> {
+  async setFile(bookId: string, file: Blob, fileName: string, totalPages: number): Promise<Book> {
     const db = await getDB();
     const existing = await db.get("books", bookId);
     if (!existing) throw new Error("Book not found.");
-    const tx = db.transaction(["books", "pdfs"], "readwrite");
+    const tx = db.transaction(["books", "files", "locations"], "readwrite");
     const next: Book = {
       ...existing,
-      pdfId: bookId,
-      pdfName,
-      pdfSize: pdf.size,
+      fileId: bookId,
+      fileName,
+      fileSize: file.size,
       totalPages: totalPages || existing.totalPages,
       updatedAt: now(),
     };
-    await Promise.all([tx.objectStore("pdfs").put(pdf, bookId), tx.objectStore("books").put(next), tx.done]);
+    await Promise.all([
+      tx.objectStore("files").put(file, bookId),
+      tx.objectStore("locations").delete(bookId),
+      tx.objectStore("books").put(next),
+      tx.done,
+    ]);
     storageEvents.emit("books", bookId);
     return next;
+  }
+
+  async getLocations(bookId: string): Promise<string | undefined> {
+    const db = await getDB();
+    return db.get("locations", bookId);
+  }
+
+  async setLocations(bookId: string, json: string): Promise<void> {
+    const db = await getDB();
+    await db.put("locations", json, bookId);
   }
 
   async getCover(coverId: string): Promise<Blob | undefined> {
@@ -221,9 +259,10 @@ export class IndexedDbBookStorage implements BookStorage {
 
   // ------------------------------------------------------------ Bookmarks
 
-  async addBookmark(bookId: string, page: number, label = ""): Promise<Bookmark> {
+  async addBookmark(bookId: string, page: number, label = "", cfi?: string): Promise<Bookmark> {
     const db = await getDB();
     const bookmark: Bookmark = { id: createId(), bookId, page, label: label.trim(), createdAt: now() };
+    if (cfi) bookmark.cfi = cfi;
     await db.put("bookmarks", bookmark);
     storageEvents.emit("bookmarks", bookId);
     return bookmark;
@@ -244,10 +283,11 @@ export class IndexedDbBookStorage implements BookStorage {
 
   // ---------------------------------------------------------------- Notes
 
-  async addNote(bookId: string, page: number, content: string): Promise<Note> {
+  async addNote(bookId: string, page: number, content: string, cfi?: string): Promise<Note> {
     const db = await getDB();
     const timestamp = now();
     const note: Note = { id: createId(), bookId, page, content: content.trim(), createdAt: timestamp, updatedAt: timestamp };
+    if (cfi) note.cfi = cfi;
     await db.put("notes", note);
     storageEvents.emit("notes", bookId);
     return note;
@@ -348,7 +388,7 @@ export class IndexedDbBookStorage implements BookStorage {
 
   // --------------------------------------------------------------- Backup
 
-  async exportLibrary(): Promise<LibraryBackupV1> {
+  async exportLibrary(): Promise<LibraryBackup> {
     const db = await getDB();
     const [books, bookmarks, notes, collections, settings] = await Promise.all([
       db.getAll("books"),
@@ -359,7 +399,7 @@ export class IndexedDbBookStorage implements BookStorage {
     ]);
     return {
       format: "the-shelf-library",
-      version: 1,
+      version: 2,
       exportedAt: now(),
       books,
       bookmarks,
@@ -371,14 +411,14 @@ export class IndexedDbBookStorage implements BookStorage {
   }
 
   async importLibrary(
-    backup: LibraryBackupV1,
-    files: { pdfs: Map<string, Blob>; covers: Map<string, Blob> },
+    backup: LibraryBackup | LibraryBackupV1,
+    files: { files: Map<string, Blob>; covers: Map<string, Blob> },
   ): Promise<ImportSummary> {
     const db = await getDB();
     const summary: ImportSummary = {
       booksAdded: 0,
       booksSkipped: 0,
-      booksWithoutPdf: 0,
+      booksWithoutFile: 0,
       bookmarksAdded: 0,
       notesAdded: 0,
       collectionsAdded: 0,
@@ -390,29 +430,30 @@ export class IndexedDbBookStorage implements BookStorage {
     const importedBookIds = new Set<string>();
 
     const tx = db.transaction(
-      ["books", "pdfs", "covers", "bookmarks", "notes", "collections"],
+      ["books", "files", "covers", "bookmarks", "notes", "collections"],
       "readwrite",
     );
     const ops: Promise<unknown>[] = [];
 
-    for (const book of backup.books) {
+    for (const raw of backup.books) {
+      const book = normalizeImportedBook(raw);
       // Never overwrite an existing book; also treat same title+author as a duplicate.
       if (existingIds.has(book.id) || existingKeys.has(normalizeKey(book.title, book.author))) {
         summary.booksSkipped += 1;
         continue;
       }
-      const pdf = files.pdfs.get(book.id);
+      const file = files.files.get(book.id);
       const cover = files.covers.get(book.id);
       const next: Book = {
         ...book,
-        pdfId: book.id,
-        pdfSize: pdf?.size ?? 0,
+        fileId: book.id,
+        fileSize: file?.size ?? 0,
         coverId: cover ? book.id : null,
         coverKind: cover ? book.coverKind === "custom" ? "custom" : "generated" : "none",
       };
-      if (!pdf) summary.booksWithoutPdf += 1;
+      if (!file) summary.booksWithoutFile += 1;
       ops.push(tx.objectStore("books").put(next));
-      if (pdf) ops.push(tx.objectStore("pdfs").put(pdf, book.id));
+      if (file) ops.push(tx.objectStore("files").put(file, book.id));
       if (cover) ops.push(tx.objectStore("covers").put(cover, book.id));
       importedBookIds.add(book.id);
       existingIds.add(book.id);
@@ -470,13 +511,14 @@ export class IndexedDbBookStorage implements BookStorage {
   async clearLibrary(): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(
-      ["books", "pdfs", "covers", "bookmarks", "notes", "collections"],
+      ["books", "files", "covers", "locations", "bookmarks", "notes", "collections"],
       "readwrite",
     );
     await Promise.all([
       tx.objectStore("books").clear(),
-      tx.objectStore("pdfs").clear(),
+      tx.objectStore("files").clear(),
       tx.objectStore("covers").clear(),
+      tx.objectStore("locations").clear(),
       tx.objectStore("bookmarks").clear(),
       tx.objectStore("notes").clear(),
       tx.objectStore("collections").clear(),

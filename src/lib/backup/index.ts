@@ -1,14 +1,14 @@
 "use client";
 
 import { unzip, zip, type Unzipped, type Zippable } from "fflate";
-import type { ImportSummary, LibraryBackupV1 } from "@/types";
+import type { ImportSummary, LibraryBackup, LibraryBackupV1 } from "@/types";
 import { storage } from "@/lib/storage";
 
-export const BACKUP_JSON_NAME = "library-backup-v1.json";
+export const BACKUP_JSON_NAME = "library-backup-v2.json";
 
 export interface ParsedBackup {
-  backup: LibraryBackupV1;
-  pdfs: Map<string, Blob>;
+  backup: LibraryBackup | LibraryBackupV1;
+  files: Map<string, Blob>;
   covers: Map<string, Blob>;
 }
 
@@ -23,7 +23,7 @@ export async function exportLibraryJson(): Promise<{ blob: Blob; fileName: strin
   return { blob, fileName: `the-shelf-${todayStamp()}-${BACKUP_JSON_NAME}` };
 }
 
-/** Full backup: metadata + PDFs + covers in one zip. */
+/** Full backup: metadata + book files + covers in one zip. */
 export async function exportLibraryZip(
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ blob: Blob; fileName: string }> {
@@ -35,8 +35,8 @@ export async function exportLibraryZip(
   };
   let done = 0;
   for (const book of backup.books) {
-    const pdf = await storage.getPdf(book.pdfId);
-    if (pdf) files[`pdfs/${book.id}.pdf`] = [new Uint8Array(await pdf.arrayBuffer()), { level: 0 }];
+    const file = await storage.getFile(book.fileId);
+    if (file) files[`files/${book.id}.${book.format}`] = [new Uint8Array(await file.arrayBuffer()), { level: 0 }];
     if (book.coverId) {
       const cover = await storage.getCover(book.coverId);
       if (cover) files[`covers/${book.id}.jpg`] = [new Uint8Array(await cover.arrayBuffer()), { level: 0 }];
@@ -50,22 +50,22 @@ export async function exportLibraryZip(
   );
   return {
     blob: new Blob([zipped as BlobPart], { type: "application/zip" }),
-    fileName: `the-shelf-${todayStamp()}-library-backup-v1.zip`,
+    fileName: `the-shelf-${todayStamp()}-library-backup-v2.zip`,
   };
 }
 
-function validateBackup(value: unknown): LibraryBackupV1 {
+function validateBackup(value: unknown): LibraryBackup | LibraryBackupV1 {
   if (!value || typeof value !== "object") throw new Error("This file is not a Shelf backup.");
-  const v = value as Partial<LibraryBackupV1>;
+  const v = value as { format?: string; version?: number; books?: unknown; bookmarks?: unknown; notes?: unknown; collections?: unknown };
   if (v.format !== "the-shelf-library") throw new Error("This file is not a Shelf backup.");
-  if (v.version !== 1) throw new Error(`Unsupported backup version (${String(v.version)}).`);
+  if (v.version !== 1 && v.version !== 2) throw new Error(`Unsupported backup version (${String(v.version)}).`);
   if (!Array.isArray(v.books)) throw new Error("Backup is missing its book list.");
   return {
     ...v,
     bookmarks: v.bookmarks ?? [],
     notes: v.notes ?? [],
     collections: v.collections ?? [],
-  } as LibraryBackupV1;
+  } as LibraryBackup | LibraryBackupV1;
 }
 
 /** Accepts either the JSON file or the zip produced by exportLibraryZip. */
@@ -83,7 +83,7 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     } catch {
       throw new Error("Could not read this file as JSON.");
     }
-    return { backup: validateBackup(parsed), pdfs: new Map(), covers: new Map() };
+    return { backup: validateBackup(parsed), files: new Map(), covers: new Map() };
   }
 
   const buffer = new Uint8Array(await file.arrayBuffer());
@@ -94,17 +94,21 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
   if (!jsonEntry) throw new Error("The zip does not contain a library backup.");
   const backup = validateBackup(JSON.parse(new TextDecoder().decode(entries[jsonEntry])));
 
-  const pdfs = new Map<string, Blob>();
+  const files = new Map<string, Blob>();
   const covers = new Map<string, Blob>();
   for (const [path, bytes] of Object.entries(entries)) {
-    const pdfMatch = path.match(/^pdfs\/(.+)\.pdf$/);
-    if (pdfMatch) pdfs.set(pdfMatch[1], new Blob([bytes as BlobPart], { type: "application/pdf" }));
+    // v2: files/<id>.<pdf|epub>; v1: pdfs/<id>.pdf
+    const fileMatch = path.match(/^(?:files|pdfs)\/(.+)\.(pdf|epub)$/);
+    if (fileMatch) {
+      const type = fileMatch[2] === "epub" ? "application/epub+zip" : "application/pdf";
+      files.set(fileMatch[1], new Blob([bytes as BlobPart], { type }));
+    }
     const coverMatch = path.match(/^covers\/(.+)\.(jpg|jpeg|png|webp)$/);
     if (coverMatch) covers.set(coverMatch[1], new Blob([bytes as BlobPart], { type: "image/jpeg" }));
   }
-  return { backup, pdfs, covers };
+  return { backup, files, covers };
 }
 
 export async function importParsedBackup(parsed: ParsedBackup): Promise<ImportSummary> {
-  return storage.importLibrary(parsed.backup, { pdfs: parsed.pdfs, covers: parsed.covers });
+  return storage.importLibrary(parsed.backup, { files: parsed.files, covers: parsed.covers });
 }
