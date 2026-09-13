@@ -37,5 +37,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|pdf.worker.min.mjs).*)"],
+  // Skip API routes, Next internals and any static file (paths containing a dot: icons, worker, manifest).
+  matcher: ["/((?!api|_next/static|_next/image|.*\\..*).*)"],
 };
