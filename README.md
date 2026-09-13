@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The Shelf
 
-## Getting Started
+A private, personal digital bookshelf for the PDFs you own. Open The Shelf, browse your books, pick one, read.
 
-First, run the development server:
+Everything runs in the browser. Books, covers, notes, bookmarks and reading progress are stored in IndexedDB on your device. There is no backend, no account and no network access beyond loading the app itself.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3000. `pnpm build && pnpm start` serves a production build.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The `predev` / `prebuild` scripts copy the pdf.js worker that matches the installed `pdfjs-dist` into `public/pdf.worker.min.mjs`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What it does
 
-## Learn More
+- **Shelf** — cover-first grid (2 columns on phones, up to 7 on wide screens), Continue Reading and Recently Added sections, filters for Reading / Want to Read / Finished, collections, global search (`⌘K`).
+- **Add a book** — drag a PDF in or choose one. Title, author and page count are read from the PDF; the first page becomes the cover unless you upload your own. Categories, tags, description and status are editable.
+- **Reader** — single page or continuous scroll, fit width / fit page / zoom, fullscreen, table of contents, full-text search with on-page highlights, bookmarks, per-page notes, keyboard shortcuts. Progress is saved automatically; reopening a book resumes where you left off. Opening a Want to Read book moves it to Reading; reaching the last page offers to mark it Finished.
+- **Backup** — export metadata as `library-backup-v1.json`, or everything including PDFs as a zip. Import restores a backup without overwriting books you already have.
+- **Sample books** — seven placeholder books with generated PDFs so the flow can be tried without your own files. No copyrighted PDFs are included.
 
-To learn more about Next.js, take a look at the following resources:
+### Keyboard shortcuts in the reader
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Keys | Action |
+| --- | --- |
+| `←` / `PageUp`, `→` / `PageDown` | Previous / next page |
+| `Home` / `End` | First / last page |
+| `⌘F` / `Ctrl+F` | Search in book |
+| `⌘+` / `⌘-` / `⌘0` | Zoom in / out / fit width |
+| `B` | Bookmark current page |
+| `F` | Fullscreen |
+| `Esc` | Exit fullscreen or close the panel |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Architecture
 
-## Deploy on Vercel
+```
+src/
+  app/                 routes (App Router)
+    (shelf)/           shelf pages that share the header shell
+    read/[id]/         distraction-free reader
+  components/
+    shelf/             header, grid, cards, continue reading, search
+    books/             add / edit / details dialogs, cover, status
+    reader/            PdfReader, toolbar, sidebar, page views
+    collections/       collections pages
+    settings/          settings page
+    ui/                shadcn/ui primitives
+  hooks/               useBooks, useBookmarks, useNotes, useReadingProgress, useCoverUrl…
+  lib/
+    storage/           BookStorage interface + IndexedDB implementation
+    pdf/               pdf.js setup, metadata, thumbnails, outline, text search, placeholder generator
+    backup/            versioned export / import (JSON and zip)
+    utils/
+  types/               data model
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The UI never touches IndexedDB directly. Everything goes through the `BookStorage` interface in `src/lib/storage/bookStorage.ts`; the IndexedDB implementation lives next to it and a SQLite-backed one could replace it without changing components or hooks. Storage changes are broadcast through a tiny event bus so hooks refresh automatically.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+PDFs and cover thumbnails are stored as Blobs in dedicated object stores, never in `localStorage`. Shelf cards only load the small cover thumbnail; the full PDF is read only when the reader opens.
+
+## Stack
+
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide · react-pdf / pdf.js · idb · fflate · sonner · next-themes
