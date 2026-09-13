@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser, type User } from "./auth";
+import { env } from "./env";
 import { QuotaError } from "./files";
 
 export class HttpError extends Error {
@@ -18,10 +19,16 @@ export function fail(status: number, message: string): NextResponse {
   return NextResponse.json({ error: message }, { status });
 }
 
-/** Resolve the signed-in user or throw 401. */
-export async function requireUser(): Promise<User> {
+/**
+ * Resolve the signed-in user or throw 401. By default the account must also
+ * have a verified email (403 otherwise) so unverified sign-ups can't use storage.
+ */
+export async function requireUser({ verified = true }: { verified?: boolean } = {}): Promise<User> {
   const user = await getCurrentUser();
   if (!user) throw new HttpError(401, "Sign in to continue.");
+  if (verified && env.requireEmailVerification && !user.emailVerified) {
+    throw new HttpError(403, "Verify your email address to continue.");
+  }
   return user;
 }
 

@@ -11,6 +11,7 @@ import { authClient, type SessionUser, type Usage } from "@/lib/auth-client";
 interface LibraryContextValue {
   user: SessionUser | null;
   usage: Usage | null;
+  verificationRequired: boolean;
   authLoading: boolean;
   refreshSession: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -37,14 +38,17 @@ interface LibraryContextValue {
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
 const PUBLIC_PATHS = ["/login", "/register"];
+const VERIFY_PATH = "/verify";
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isVerifyPage = pathname === VERIFY_PATH;
 
   const [user, setUser] = useState<SessionUser | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
 
   const [books, setBooks] = useState<Book[]>([]);
@@ -67,6 +71,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const info = await authClient.session();
       setUser(info.user);
       setUsage(info.usage);
+      setVerificationRequired(info.emailVerificationRequired);
     } catch {
       setUser(null);
       setUsage(null);
@@ -116,10 +121,19 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      if (!isPublic) router.replace(`/login${pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""}`);
+      if (!isPublic && !isVerifyPage) router.replace(`/login${pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""}`);
+      return;
+    }
+    const needsVerification = verificationRequired && !user.emailVerified;
+    if (needsVerification) {
+      if (!isVerifyPage) router.replace(VERIFY_PATH);
       return;
     }
     if (isPublic) {
+      router.replace("/");
+      return;
+    }
+    if (isVerifyPage && !window.location.search.includes("token=")) {
       router.replace("/");
       return;
     }
@@ -138,7 +152,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, isPublic]);
+  }, [authLoading, user?.id, user?.emailVerified, verificationRequired, isPublic, isVerifyPage]);
 
   useEffect(() => {
     if (settingsLoaded) applyTheme(settings.theme);
@@ -161,7 +175,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<LibraryContextValue>(
     () => ({
-      user, usage, authLoading, refreshSession, signOut,
+      user, usage, verificationRequired, authLoading, refreshSession, signOut,
       books, booksLoading, booksError, refreshBooks,
       collections, collectionsLoading,
       settings, settingsLoaded, updateSettings,
@@ -169,7 +183,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       addBookOpen, setAddBookOpen, editBookId, setEditBookId, searchOpen, setSearchOpen,
     }),
     [
-      user, usage, authLoading, refreshSession, signOut, books, booksLoading, booksError, refreshBooks,
+      user, usage, verificationRequired, authLoading, refreshSession, signOut, books, booksLoading, booksError, refreshBooks,
       collections, collectionsLoading, settings, settingsLoaded, updateSettings, selectedBookId,
       addBookOpen, editBookId, searchOpen,
     ],

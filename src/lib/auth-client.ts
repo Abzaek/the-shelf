@@ -8,6 +8,7 @@ export interface SessionUser {
   displayName: string;
   role: "user" | "admin";
   quotaBytes: number;
+  emailVerified: boolean;
   createdAt: string;
 }
 
@@ -22,6 +23,7 @@ export interface SessionInfo {
   user: SessionUser | null;
   usage: Usage | null;
   registrationOpen: boolean;
+  emailVerificationRequired: boolean;
 }
 
 async function post<T>(url: string, body?: unknown): Promise<T> {
@@ -39,13 +41,15 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
 export const authClient = {
   session: async (): Promise<SessionInfo> => {
     const res = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
-    if (!res.ok) return { user: null, usage: null, registrationOpen: true };
+    if (!res.ok) return { user: null, usage: null, registrationOpen: true, emailVerificationRequired: false };
     return res.json();
   },
   login: (email: string, password: string) => post<{ user: SessionUser }>("/api/auth/login", { email, password }),
   register: (email: string, password: string, displayName: string) =>
     post<{ user: SessionUser }>("/api/auth/register", { email, password, displayName }),
   logout: () => post<{ ok: true }>("/api/auth/logout"),
+  verifyEmail: (token: string) => post<{ user: SessionUser }>("/api/auth/verify", { token }),
+  resendVerification: () => post<{ ok: true; alreadyVerified?: boolean }>("/api/auth/resend-verification"),
   deleteAccount: async (password: string): Promise<void> => {
     const res = await fetch("/api/auth/account", {
       method: "DELETE",

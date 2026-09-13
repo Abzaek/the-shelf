@@ -87,6 +87,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX collections_user ON collections(user_id);
   `,
+  `
+  ALTER TABLE users ADD COLUMN email_verified_at TEXT;
+  UPDATE users SET email_verified_at = created_at;
+  CREATE TABLE email_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT
+  );
+  CREATE INDEX email_tokens_user ON email_tokens(user_id, purpose);
+  `,
 ];
 
 let instance: Database.Database | null = null;

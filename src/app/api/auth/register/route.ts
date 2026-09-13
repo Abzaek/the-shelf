@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
-import { allowAttempt, clientIp, createSession, createUser, findUserByEmail, sessionCookieOptions } from "@/server/auth";
+import { allowAttempt, clientIp, createEmailToken, createSession, createUser, findUserByEmail, sessionCookieOptions } from "@/server/auth";
+import { sendEmail, verificationEmail } from "@/server/email";
 import { env } from "@/server/env";
 import { handler, HttpError, json, readJson } from "@/server/http";
 
@@ -16,6 +17,14 @@ export const POST = handler(async (request) => {
   const { email, password, displayName } = await readJson(request, schema);
   if (findUserByEmail(email)) throw new HttpError(409, "An account with that email already exists.");
   const user = await createUser(email, password, displayName);
+  if (!user.emailVerified) {
+    try {
+      await sendEmail(verificationEmail(user.email, user.displayName, createEmailToken(user.id, "verify")));
+    } catch (err) {
+      console.error("Verification email failed:", err);
+      // Account exists; the user can request another email from the verify screen.
+    }
+  }
   const session = await createSession(user.id);
   (await cookies()).set({ ...sessionCookieOptions(session.expiresAt), value: session.token });
   return json({ user }, { status: 201 });

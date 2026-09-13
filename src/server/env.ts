@@ -27,6 +27,15 @@ export const env = {
   registrationOpen: (process.env.SHELF_REGISTRATION ?? "open") !== "closed",
   sessionDays: int("SHELF_SESSION_DAYS", 30),
   isProduction: process.env.NODE_ENV === "production",
+  /** Public origin used in emails, e.g. https://shelf.abzaek.dev */
+  appUrl: (process.env.SHELF_APP_URL ?? (process.env.NODE_ENV === "production" ? "https://shelf.abzaek.dev" : "http://localhost:3000")).replace(/\/$/, ""),
+  /** Resend API key. When absent, emails are logged to the server console instead. */
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
+  emailFrom: process.env.SHELF_EMAIL_FROM ?? "The Shelf <shelf@abzaek.dev>",
+  /** Gate the library behind a verified email. Defaults to on when Resend is configured. */
+  requireEmailVerification: process.env.SHELF_REQUIRE_EMAIL_VERIFICATION
+    ? process.env.SHELF_REQUIRE_EMAIL_VERIFICATION !== "false"
+    : !!process.env.RESEND_API_KEY,
 };
 
 /** Called on first real request (not at build time) so misconfiguration fails loudly. */

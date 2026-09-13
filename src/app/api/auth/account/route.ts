@@ -7,7 +7,7 @@ import { handler, HttpError, json, readJson, requireUser } from "@/server/http";
 
 /** Permanently delete the signed-in account: rows cascade in SQLite, files are removed from disk. */
 export const DELETE = handler(async (request) => {
-  const user = await requireUser();
+  const user = await requireUser({ verified: false });
   const { password } = await readJson(request, z.object({ password: z.string().max(200) }));
   const record = findUserByEmail(user.email);
   if (!record || !(await verifyPassword(password, record.passwordHash))) throw new HttpError(403, "Password is incorrect.");

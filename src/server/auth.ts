@@ -19,6 +19,7 @@ export interface User {
   displayName: string;
   role: "user" | "admin";
   quotaBytes: number;
+  emailVerified: boolean;
   createdAt: string;
 }
 
@@ -29,6 +30,7 @@ interface UserRow {
   display_name: string;
   role: string;
   quota_bytes: number | null;
+  email_verified_at: string | null;
   created_at: string;
 }
 
@@ -39,6 +41,7 @@ function toUser(row: UserRow): User {
     displayName: row.display_name,
     role: row.role === "admin" ? "admin" : "user",
     quotaBytes: row.quota_bytes ?? env.userQuotaBytes,
+    emailVerified: !!row.email_verified_at,
     createdAt: row.created_at,
   };
 }
@@ -83,11 +86,44 @@ export async function createUser(email: string, password: string, displayName = 
   const count = (db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
   // The very first account administers the instance.
   const role = count === 0 ? "admin" : "user";
+  // Without an email provider there is no way to verify, so accounts start verified.
+  const verifiedAt = env.requireEmailVerification ? null : ts;
   db.prepare(
-    `INSERT INTO users (id, email, password_hash, display_name, role, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, normalizeEmail(email), await hashPassword(password), displayName.trim(), role, ts, ts);
+    `INSERT INTO users (id, email, password_hash, display_name, role, email_verified_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, normalizeEmail(email), await hashPassword(password), displayName.trim(), role, verifiedAt, ts, ts);
   return findUserById(id)!;
+}
+
+export function markEmailVerified(userId: string): void {
+  getDb().prepare("UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?").run(now(), now(), userId);
+}
+
+// ------------------------------------------------------------- email tokens
+
+export type EmailTokenPurpose = "verify";
+
+/** Creates a single-use token (returned raw; only its hash is stored). Older tokens for the purpose are invalidated. */
+export function createEmailToken(userId: string, purpose: EmailTokenPurpose, ttlMs = 24 * 3_600_000): string {
+  const db = getDb();
+  const token = randomBytes(32).toString("base64url");
+  db.prepare("UPDATE email_tokens SET consumed_at = ? WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL").run(now(), userId, purpose);
+  db.prepare(
+    "INSERT INTO email_tokens (id, user_id, purpose, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(createId(), userId, purpose, hashToken(token), now(), new Date(Date.now() + ttlMs).toISOString());
+  return token;
+}
+
+/** Consumes a token; returns the user id or null when unknown, expired or already used. */
+export function consumeEmailToken(token: string, purpose: EmailTokenPurpose): string | null {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT id, user_id, expires_at, consumed_at FROM email_tokens WHERE token_hash = ? AND purpose = ?")
+    .get(hashToken(token), purpose) as { id: string; user_id: string; expires_at: string; consumed_at: string | null } | undefined;
+  if (!row || row.consumed_at || row.expires_at < now()) return null;
+  db.prepare("UPDATE email_tokens SET consumed_at = ? WHERE id = ?").run(now(), row.id);
+  db.prepare("DELETE FROM email_tokens WHERE expires_at < ?").run(now());
+  return row.user_id;
 }
 
 export function countUsers(): number {

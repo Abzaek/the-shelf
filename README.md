@@ -34,6 +34,12 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 | `SHELF_USER_QUOTA_BYTES` | 250 MB | Per-account cap |
 | `SHELF_TOTAL_QUOTA_BYTES` | 10 GB | Whole-store cap |
 | `SHELF_REGISTRATION` | `open` | `closed` disables sign-up |
+| `RESEND_API_KEY` | — | Resend key for email. Without it, emails go to the server log |
+| `SHELF_EMAIL_FROM` | `The Shelf <shelf@abzaek.dev>` | Sender; the domain must be verified in Resend |
+| `SHELF_APP_URL` | `https://shelf.abzaek.dev` | Origin used in email links |
+| `SHELF_REQUIRE_EMAIL_VERIFICATION` | on when key set | Force verification on/off |
+
+New accounts receive a confirmation link (valid 24 h, single-use). Until confirmed, the account can sign in but every library route returns 403 and the app shows a "check your inbox" screen with a resend button (3 per hour).
 
 ### Keyboard shortcuts in the reader
 
@@ -76,7 +82,7 @@ src/
 
 The UI never talks to the API directly. Everything goes through the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `httpStorage.ts`. Storage changes are broadcast through a tiny event bus so hooks refresh automatically.
 
-**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting. Every table is scoped by `user_id` and every route resolves the session before touching data. Files are stored at `<SHELF_DATA_DIR>/users/<userId>/<bookId>.<pdf|epub>` and streamed back with HTTP Range support. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
+**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Every table is scoped by `user_id` and every route resolves the session before touching data. Files are stored at `<SHELF_DATA_DIR>/users/<userId>/<bookId>.<pdf|epub>` and streamed back with HTTP Range support. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
 
 Shelf cards only load the small cover thumbnail; the full file is fetched only when the reader opens.
 

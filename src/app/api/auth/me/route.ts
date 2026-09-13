@@ -9,5 +9,6 @@ export const GET = handler(async () => {
     user,
     usage: user ? userUsage(user.id, user.quotaBytes) : null,
     registrationOpen: env.registrationOpen,
+    emailVerificationRequired: env.requireEmailVerification,
   });
 });
