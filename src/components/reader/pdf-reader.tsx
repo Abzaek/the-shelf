@@ -1,5 +1,7 @@
 "use client";
 
+import { useReadingAnalytics } from "@/hooks/use-reading-analytics";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Document } from "react-pdf";
@@ -134,6 +136,8 @@ export function PdfReader({ book, file, settings }: PdfReaderProps) {
     },
     [numPages],
   );
+
+  useReadingAnalytics(book.id, currentPage, numPages > 0);
 
   // Persist progress whenever the page changes (after the document is known).
   useEffect(() => {

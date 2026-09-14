@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { assertRuntimeConfig, env } from "./env";
+import { analyticsMigration } from "./analytics/schema";
 
 /**
  * SQLite connection (one per process). WAL mode so reads never block writes.
@@ -101,6 +102,7 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX email_tokens_user ON email_tokens(user_id, purpose);
   `,
+  analyticsMigration,
 ];
 
 let instance: Database.Database | null = null;

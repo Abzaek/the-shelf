@@ -1,5 +1,7 @@
 "use client";
 
+import { useReadingAnalytics } from "@/hooks/use-reading-analytics";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -204,6 +206,8 @@ export function EpubReader({ book, file, settings }: EpubReaderProps) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [ready]);
+
+  useReadingAnalytics(book.id, currentPage, ready && numLocations > 0);
 
   // Persist progress on every relocation.
   useEffect(() => {

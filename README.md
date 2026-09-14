@@ -53,6 +53,10 @@ New accounts receive a confirmation link (valid 24 h, single-use). Until confirm
 | `F` | Fullscreen |
 | `Esc` | Exit fullscreen or close the panel |
 
+## Deploying
+
+Every push runs CI (typecheck, lint, build). Pushes to `main` that pass are deployed by the same workflow: the standalone build is rsynced to the server as a new release, `deploy/activate.sh` swaps in the Linux `better-sqlite3` build, flips the `current` symlink, reloads pm2, health-checks, and rolls back the symlink if the new release doesn't answer. `./deploy/deploy.sh` does the same from a workstation. Secrets live on the server in `shelf.env`; the workflow only needs an SSH deploy key.
+
 ## Architecture
 
 ```

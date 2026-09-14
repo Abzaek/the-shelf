@@ -1,4 +1,5 @@
 import "server-only";
+import { recordActivity } from "./analytics/tracking";
 import { getDb, now } from "./db";
 import { createId } from "@/lib/utils/id";
 import { clamp, computeProgress } from "@/lib/utils/format";
@@ -100,6 +101,7 @@ export const books = {
         input.coverKind, input.coverSize, input.fileName, input.fileSize, input.totalPages, currentPage,
         finished ? 100 : computeProgress(currentPage, input.totalPages), ts, ts, finished ? ts : null,
       );
+    recordActivity(userId, "book_uploaded", id, input.title, input.fileSize + input.coverSize);
     return books.get(userId, id)!;
   },
 
@@ -132,6 +134,7 @@ export const books = {
         next.status, next.totalPages, next.currentPage, next.currentCfi, next.progress, next.updatedAt, next.lastOpenedAt,
         next.finishedAt, userId, id,
       );
+    if (patch.status === "finished" && existing.status !== "finished") recordActivity(userId, "book_completed", id, next.title);
     return books.get(userId, id);
   },
 
@@ -151,6 +154,7 @@ export const books = {
         total, page, currentCfi === undefined ? existing.currentCfi : currentCfi,
         existing.status === "finished" ? 100 : computeProgress(page, total), status, ts, ts, userId, id,
       );
+    recordActivity(userId, "reading_progress_updated", id);
     return books.get(userId, id);
   },
 
@@ -175,7 +179,9 @@ export const books = {
     if (!existing) return null;
     const db = getDb();
     db.transaction(() => {
+      const size = db.prepare("SELECT file_size + cover_size bytes FROM books WHERE user_id = ? AND id = ?").get(userId, id) as { bytes: number };
       db.prepare("DELETE FROM books WHERE user_id = ? AND id = ?").run(userId, id);
+      recordActivity(userId, "book_deleted", id, existing.title, size.bytes);
       for (const c of collections.list(userId)) {
         if (c.bookIds.includes(id)) collections.update(userId, c.id, { bookIds: c.bookIds.filter((b) => b !== id) });
       }

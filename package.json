@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:analytics": "node scripts/analytics.test.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

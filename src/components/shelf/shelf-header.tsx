@@ -19,7 +19,7 @@ const NAV = [
 
 export function ShelfHeader() {
   const pathname = usePathname();
-  const { setAddBookOpen, setSearchOpen } = useLibrary();
+  const { user, setAddBookOpen, setSearchOpen } = useLibrary();
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
@@ -54,6 +54,7 @@ export function ShelfHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
+          {user?.role === "admin" && <Button asChild variant="ghost" size="sm"><Link href="/admin">Analytics</Link></Button>}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Search library" onClick={() => setSearchOpen(true)}>

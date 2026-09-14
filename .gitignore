@@ -45,3 +45,6 @@ next-env.d.ts
 
 # server data (SQLite + uploaded files) in local dev
 /.data
+
+# post assets (large screenshots, not part of the app)
+/telegram-post-assets

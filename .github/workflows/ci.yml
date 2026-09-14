@@ -1,0 +1,77 @@
+name: CI / CD
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm exec eslint src
+      - run: pnpm build
+      - name: Stage release
+        run: bash deploy/stage.sh release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release
+          include-hidden-files: true
+          retention-days: 3
+
+  deploy:
+    name: Deploy to shelf.abzaek.dev
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://shelf.abzaek.dev
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Upload release
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          RELEASE="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
+          echo "RELEASE=$RELEASE" >> "$GITHUB_ENV"
+          chmod +x release/deploy/activate.sh
+          ssh -i ~/.ssh/deploy_key "$USER@$HOST" "mkdir -p /home/opc/apps/the-shelf/releases/$RELEASE"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" release/ "$USER@$HOST:/home/opc/apps/the-shelf/releases/$RELEASE/"
+      - name: Activate release
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh -i ~/.ssh/deploy_key "$USER@$HOST" "bash /home/opc/apps/the-shelf/releases/$RELEASE/deploy/activate.sh $RELEASE"
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /dev/null -m 10 -w "%{http_code}" https://shelf.abzaek.dev/login || true)
+            [ "$CODE" = "200" ] && { echo "https://shelf.abzaek.dev/login → 200"; exit 0; }
+            sleep 5
+          done
+          echo "Smoke test failed ($CODE)"; exit 1

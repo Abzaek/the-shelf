@@ -1,4 +1,5 @@
 import "server-only";
+import { recordActivity } from "./analytics/tracking";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { getDb, now } from "./db";
@@ -92,6 +93,7 @@ export async function createUser(email: string, password: string, displayName = 
     `INSERT INTO users (id, email, password_hash, display_name, role, email_verified_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(id, normalizeEmail(email), await hashPassword(password), displayName.trim(), role, verifiedAt, ts, ts);
+  recordActivity(id, "user_registered");
   return findUserById(id)!;
 }
 
@@ -148,6 +150,7 @@ export async function createSession(userId: string): Promise<{ token: string; ex
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(createId(), userId, hashToken(token), ts, expiresAt, ts, ua);
+  recordActivity(userId, "login");
   return { token, expiresAt };
 }
 

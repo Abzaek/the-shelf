@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { ShelfHeader } from "./shelf-header";
 import { SearchCommand } from "./search-command";
@@ -12,6 +13,9 @@ const AddBookDialog = dynamic(() => import("@/components/books/add-book-dialog")
 });
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    void fetch("/api/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "library_opened" }) }).catch(() => {});
+  }, []);
   return (
     <div className="flex min-h-svh flex-col">
       <ShelfHeader />
