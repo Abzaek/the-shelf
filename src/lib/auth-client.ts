@@ -6,9 +6,10 @@ export interface SessionUser {
   id: string;
   email: string;
   displayName: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "superadmin";
   quotaBytes: number;
   emailVerified: boolean;
+  disabled: boolean;
   createdAt: string;
 }
 

@@ -14,14 +14,21 @@ function scrypt(password: string, salt: Buffer, keylen: number): Promise<Buffer>
 }
 export const SESSION_COOKIE = "shelf_session";
 
+export type Role = "user" | "admin" | "superadmin";
+
 export interface User {
   id: string;
   email: string;
   displayName: string;
-  role: "user" | "admin";
+  role: Role;
   quotaBytes: number;
   emailVerified: boolean;
+  disabled: boolean;
   createdAt: string;
+}
+
+export function isAdmin(user: Pick<User, "role">): boolean {
+  return user.role === "admin" || user.role === "superadmin";
 }
 
 interface UserRow {
@@ -32,6 +39,7 @@ interface UserRow {
   role: string;
   quota_bytes: number | null;
   email_verified_at: string | null;
+  disabled_at: string | null;
   created_at: string;
 }
 
@@ -40,9 +48,10 @@ function toUser(row: UserRow): User {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
-    role: row.role === "admin" ? "admin" : "user",
+    role: row.role === "superadmin" ? "superadmin" : row.role === "admin" ? "admin" : "user",
     quotaBytes: row.quota_bytes ?? env.userQuotaBytes,
     emailVerified: !!row.email_verified_at,
+    disabled: !!row.disabled_at,
     createdAt: row.created_at,
   };
 }
@@ -84,15 +93,14 @@ export async function createUser(email: string, password: string, displayName = 
   const db = getDb();
   const id = createId();
   const ts = now();
-  const count = (db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
-  // The very first account administers the instance.
-  const role = count === 0 ? "admin" : "user";
+  const normalized = normalizeEmail(email);
+  const role: Role = normalized === env.superAdminEmail ? "superadmin" : "user";
   // Without an email provider there is no way to verify, so accounts start verified.
   const verifiedAt = env.requireEmailVerification ? null : ts;
   db.prepare(
     `INSERT INTO users (id, email, password_hash, display_name, role, email_verified_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, normalizeEmail(email), await hashPassword(password), displayName.trim(), role, verifiedAt, ts, ts);
+  ).run(id, normalized, await hashPassword(password), displayName.trim(), role, verifiedAt, ts, ts);
   recordActivity(id, "user_registered");
   return findUserById(id)!;
 }
@@ -179,6 +187,10 @@ export async function getCurrentUser(): Promise<User | null> {
     db.prepare("DELETE FROM sessions WHERE id = ?").run(row.session_id);
     return null;
   }
+  if (row.disabled_at) {
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(row.id);
+    return null;
+  }
   // Sliding expiry, refreshed at most once an hour.
   if (Date.parse(row.last_seen_at) < Date.now() - 3_600_000) {
     db.prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").run(
@@ -186,6 +198,7 @@ export async function getCurrentUser(): Promise<User | null> {
       new Date(Date.now() + env.sessionDays * 86_400_000).toISOString(),
       row.session_id,
     );
+    db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").run(now(), row.id);
   }
   db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(now());
   return toUser(row);

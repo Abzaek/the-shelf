@@ -14,6 +14,7 @@ export const POST = handler(async (request) => {
   const user = findUserByEmail(email);
   const ok = user ? await verifyPassword(password, user.passwordHash) : false;
   if (!user || !ok) throw new HttpError(401, "Email or password is incorrect.");
+  if (user.disabled) throw new HttpError(403, "This account has been disabled.");
   const session = await createSession(user.id);
   (await cookies()).set({ ...sessionCookieOptions(session.expiresAt), value: session.token });
   const { passwordHash: _omit, ...safe } = user;

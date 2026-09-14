@@ -103,6 +103,25 @@ const MIGRATIONS: string[] = [
   CREATE INDEX email_tokens_user ON email_tokens(user_id, purpose);
   `,
   analyticsMigration,
+  `
+  ALTER TABLE users ADD COLUMN disabled_at TEXT;
+  ALTER TABLE users ADD COLUMN last_seen_at TEXT;
+  CREATE TABLE instance_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id TEXT,
+    actor_email TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_id TEXT,
+    target_email TEXT,
+    detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 let instance: Database.Database | null = null;
@@ -127,6 +146,9 @@ export function getDb(): Database.Database {
     const version = i + 1;
     if (!applied.has(version)) apply(version, sql);
   });
+  // The configured super admin always holds that role; nobody else does.
+  db.prepare("UPDATE users SET role = 'admin' WHERE role = 'superadmin' AND email <> ?").run(env.superAdminEmail);
+  db.prepare("UPDATE users SET role = 'superadmin', disabled_at = NULL WHERE email = ?").run(env.superAdminEmail);
   instance = db;
   return db;
 }

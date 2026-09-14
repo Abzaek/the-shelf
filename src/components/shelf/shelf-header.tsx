@@ -54,7 +54,11 @@ export function ShelfHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
-          {user?.role === "admin" && <Button asChild variant="ghost" size="sm"><Link href="/admin">Analytics</Link></Button>}
+          {(user?.role === "admin" || user?.role === "superadmin") && (
+            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex text-muted-foreground">
+              <Link href="/admin">Admin</Link>
+            </Button>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Search library" onClick={() => setSearchOpen(true)}>

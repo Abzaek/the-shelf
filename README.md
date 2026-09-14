@@ -33,11 +33,16 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 | `SHELF_SESSION_SECRET` | — | Required in production, ≥ 32 chars |
 | `SHELF_USER_QUOTA_BYTES` | 250 MB | Per-account cap |
 | `SHELF_TOTAL_QUOTA_BYTES` | 10 GB | Whole-store cap |
-| `SHELF_REGISTRATION` | `open` | `closed` disables sign-up |
+| `SHELF_REGISTRATION` | `open` | Default for sign-up; admins can flip it at runtime |
+| `SHELF_SUPERADMIN_EMAIL` | `abzaeko@gmail.com` | The one account that manages admins |
 | `RESEND_API_KEY` | — | Resend key for email. Without it, emails go to the server log |
 | `SHELF_EMAIL_FROM` | `The Shelf <shelf@abzaek.dev>` | Sender; the domain must be verified in Resend |
 | `SHELF_APP_URL` | `https://shelf.abzaek.dev` | Origin used in email links |
 | `SHELF_REQUIRE_EMAIL_VERIFICATION` | on when key set | Force verification on/off |
+
+### Roles and admin
+
+Three roles: `user`, `admin`, `superadmin`. The super admin is pinned to `SHELF_SUPERADMIN_EMAIL` (default `abzaeko@gmail.com`): that account gets the role automatically when it registers, can't be demoted, disabled or deleted, and is the only one who can promote or demote admins. Admins can see `/admin` (analytics) and `/admin/users` (accounts): set quotas, mark emails verified, disable/enable, sign out everywhere, delete readers, and toggle registration at runtime. Every admin action is written to an audit log shown on the page. All admin pages and `/api/admin/*` routes check the role server-side.
 
 New accounts receive a confirmation link (valid 24 h, single-use). Until confirmed, the account can sign in but every library route returns 403 and the app shows a "check your inbox" screen with a resend button (3 per hour).
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { cookies } from "next/headers";
 import { allowAttempt, clientIp, createEmailToken, createSession, createUser, findUserByEmail, sessionCookieOptions } from "@/server/auth";
 import { sendEmail, verificationEmail } from "@/server/email";
-import { env } from "@/server/env";
+import { isRegistrationOpen } from "@/server/admin";
 import { handler, HttpError, json, readJson } from "@/server/http";
 
 const schema = z.object({
@@ -12,7 +12,7 @@ const schema = z.object({
 });
 
 export const POST = handler(async (request) => {
-  if (!env.registrationOpen) throw new HttpError(403, "Registration is closed.");
+  if (!isRegistrationOpen()) throw new HttpError(403, "Registration is closed.");
   if (!allowAttempt(`register:${await clientIp()}`, 5, 60 * 60 * 1000)) throw new HttpError(429, "Too many sign-ups from this address. Try later.");
   const { email, password, displayName } = await readJson(request, schema);
   if (findUserByEmail(email)) throw new HttpError(409, "An account with that email already exists.");

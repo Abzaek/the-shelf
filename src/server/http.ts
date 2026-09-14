@@ -59,4 +59,17 @@ export function handler<Ctx>(fn: (request: Request, ctx: Ctx) => Promise<Respons
   };
 }
 
+/** Signed-in, verified, and an admin or the super admin; 403 otherwise. */
+export async function requireAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (user.role !== "admin" && user.role !== "superadmin") throw new HttpError(403, "Admin access required.");
+  return user;
+}
+
+export async function requireSuperAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (user.role !== "superadmin") throw new HttpError(403, "Only the super admin can do that.");
+  return user;
+}
+
 export type RouteParams<T extends string> = { params: Promise<Record<T, string>> };

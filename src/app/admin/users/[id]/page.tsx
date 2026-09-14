@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getCurrentUser } from "@/server/auth";
+import { getCurrentUser, isAdmin } from "@/server/auth";
 import { getUserAnalytics } from "@/server/analytics/report";
 import { env } from "@/server/env";
 import { UserProfile } from "@/components/admin/user-profile";
@@ -15,7 +15,7 @@ export default async function UserPage({ params }: {
     const viewer = await getCurrentUser();
     if (!viewer)
         redirect("/login?next=/admin");
-    if (viewer.role !== "admin")
+    if (!isAdmin(viewer))
         notFound();
     if (env.requireEmailVerification && !viewer.emailVerified)
         redirect("/verify");

@@ -1,5 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { getCurrentUser } from "@/server/auth";
+import { getCurrentUser, isAdmin } from "@/server/auth";
 import { getAnalytics } from "@/server/analytics/report";
 import { Dashboard } from "@/components/admin/dashboard";
 import { env } from "@/server/env";
@@ -9,7 +9,7 @@ export default async function AdminPage() {
     const user = await getCurrentUser();
     if (!user)
         redirect("/login?next=/admin");
-    if (user.role !== "admin")
+    if (!isAdmin(user))
         notFound();
     if (env.requireEmailVerification && !user.emailVerified)
         redirect("/verify");
