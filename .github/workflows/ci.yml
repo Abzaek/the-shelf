@@ -25,12 +25,12 @@ jobs:
       - run: pnpm exec eslint src
       - run: pnpm build
       - name: Stage release
-        run: bash deploy/stage.sh release
+        # Tarball keeps pnpm's node_modules symlinks; upload-artifact alone would flatten them.
+        run: bash deploy/stage.sh release && tar -czf release.tgz -C release .
       - uses: actions/upload-artifact@v4
         with:
           name: release
-          path: release
-          include-hidden-files: true
+          path: release.tgz
           retention-days: 3
 
   deploy:
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release
-          path: release
+      - run: mkdir -p release && tar -xzf release.tgz -C release
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
