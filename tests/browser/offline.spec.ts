@@ -113,6 +113,37 @@ test("download, cold offline launch, PDF reading, durable notes and reconnect", 
   expect(errors).toEqual([]);
 });
 
+test("stalled session checks fall back to the downloaded library", async ({ page, context }) => {
+  await register(context);
+  const book = await seed(context);
+  await ready(page);
+  await page.getByText("Downloads (1 books)", { exact: true }).click();
+  await page.getByRole("button", { name: "Download for offline reading" }).click();
+  await expect(page.getByRole("button", { name: "Remove download", exact: true })).toBeVisible();
+  // Model the WebKit failure deterministically: an auth request that never
+  // settles until the application aborts it, instead of immediately rejecting.
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (input, options) => {
+      if (input === "/api/auth/me") {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = () => reject(new DOMException("Aborted", "AbortError"));
+          if (options?.signal?.aborted) abort();
+          else options?.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      return originalFetch(input, options);
+    };
+  });
+  await setOffline(context, true);
+  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible();
+  await openNotes(page);
+  await page.getByRole("textbox", { name: /Note for page/ }).fill("Recovered from stalled session");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(page.getByText("Recovered from stalled session", { exact: true })).toBeVisible();
+});
+
 test("offline import survives reload and uploads after reconnect", async ({ page, context }) => {
   await register(context);
   await ready(page);

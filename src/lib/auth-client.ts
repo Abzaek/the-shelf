@@ -42,9 +42,19 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
 
 export const authClient = {
   session: async (): Promise<SessionInfo> => {
-    const res = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
-    if (!res.ok) throw new ApiError(res.status, "Could not check your session.");
-    return res.json();
+    // A broken connection can leave fetch pending even while navigator says online.
+    // Bound the entire response so the provider can restore the cached local identity.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch("/api/auth/me", {
+        credentials: "same-origin", cache: "no-store", signal: controller.signal,
+      });
+      if (!res.ok) throw new ApiError(res.status, "Could not check your session.");
+      return await res.json();
+    } finally {
+      clearTimeout(timeout);
+    }
   },
   login: (email: string, password: string) => post<{ user: SessionUser }>("/api/auth/login", { email, password }).then(result => { unlockSession(); return result; }),
   register: (email: string, password: string, displayName: string) =>

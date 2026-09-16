@@ -35,6 +35,8 @@ A first online visit and verified sign-in are required. Only downloaded books ar
 
 No auth, admin, API, or private file response is runtime-cached by the service worker. `/offline` contains no user data. IndexedDB is account-scoped. Explicit logout blocks cached identity restoration until another successful login. A cached identity never authorizes a server operation.
 
+Session checks have an eight-second deadline, including reading the response body. A stalled connection must release startup to the existing cached-identity fallback even if the browser reports online. This does not bypass server authentication or the local sign-out lock. Keep the stalled-session browser regression when changing startup or authentication.
+
 A new service worker waits for old windows to close. Do not add unconditional `skipWaiting`/reload-on-connect: unsaved editor drafts and schema compatibility need an explicit upgrade plan.
 
 ## Honest limits
