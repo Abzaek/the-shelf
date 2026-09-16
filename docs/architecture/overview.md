@@ -1,6 +1,6 @@
 # The Shelf architecture
 
-Read `AGENTS.md` first. Scope is private personal reading. Community and commerce are outside the current release.
+Read `AGENTS.md` first. Scope is private personal reading plus an invite-only community pilot. Commerce remains deferred. Read `community.md` for the separate membership and publication boundary.
 
 ## Runtime boundaries
 
@@ -15,6 +15,7 @@ Read `AGENTS.md` first. Scope is private personal reading. Community and commerc
 | `src/server/drive`, `src/lib/drive` | OAuth, encrypted credentials, Google file access, user-triggered picker |
 | `src/components/offline` | Installation, sync state, download management, offline shell |
 | `src/app/sw.ts` | Serwist service worker: app assets and a public offline shell only |
+| `src/lib/community`, `src/server/community`, `src/components/community` | Shared contracts/client, membership-authorized services, and community UI; separate from private replication |
 | `src/server/analytics` | Existing online engagement instrumentation and reports |
 
 ## Read and write flow

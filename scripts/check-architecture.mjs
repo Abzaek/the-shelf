@@ -71,6 +71,26 @@ for (const file of [...walk("src/components"), ...walk("src/hooks")].filter((fil
       failures.push(`${file}: UI must not import server/database implementations (${specifier}).`);
   }
 }
+// Community services must not acquire a private-library or browser-storage dependency.
+for (const file of walk("src/server/community").filter((file) => file.endsWith(".ts"))) {
+  for (const specifier of runtimeImports(file)) {
+    const target = resolvedImport(file, specifier);
+    if (
+      target &&
+      [
+        "src/server/repo",
+        "src/server/files",
+        "src/server/sync",
+        "src/server/drive",
+        "src/lib/storage",
+      ].some(
+        (boundary) =>
+          target === path.resolve(boundary) || target.startsWith(path.resolve(boundary) + path.sep),
+      )
+    )
+      failures.push(`${file}: community must not import private library services (${specifier}).`);
+  }
+}
 for (const file of [
   "AGENTS.md",
   "CLAUDE.md",
@@ -78,6 +98,8 @@ for (const file of [
   "docs/architecture/overview.md",
   "docs/architecture/offline-sync.md",
   "docs/decisions/0001-local-first-reading.md",
+  "docs/architecture/community.md",
+  "docs/decisions/0002-community-pilot.md",
 ]) {
   if (!fs.existsSync(file)) failures.push(`Missing contributor contract: ${file}`);
 }

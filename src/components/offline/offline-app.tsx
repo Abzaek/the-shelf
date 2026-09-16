@@ -7,6 +7,7 @@ import { ShelfPage } from "@/components/shelf/shelf-page";
 import { SettingsPage } from "@/components/settings/settings-page";
 import { CollectionsPage } from "@/components/collections/collections-page";
 import { CollectionDetailPage } from "@/components/collections/collection-detail-page";
+import { CommunityPage } from "@/components/community/community-page";
 import { ReaderLoading } from "@/components/reader/reader-loading";
 /** Public, data-free HTML shell; private data is opened only by the account-scoped provider. */
 export function OfflineApp() {
@@ -33,7 +34,9 @@ export function OfflineApp() {
   if (reader) return <ReaderRoute bookId={reader[1]} />;
   const collection = /^\/collections\/([\w-]+)$/.exec(path);
   const content =
-    path === "/settings" ? (
+    path === "/community" ? (
+      <CommunityPage />
+    ) : path === "/settings" ? (
       <SettingsPage />
     ) : path === "/collections" ? (
       <CollectionsPage />

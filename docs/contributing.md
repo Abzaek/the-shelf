@@ -2,7 +2,7 @@
 
 `AGENTS.md` is the source of contributor instructions. This workflow applies to any AI model and to human contributors.
 
-1. Read the architecture and relevant ADRs. Identify the module that owns the behavior.
+1. Read the architecture and relevant ADRs. Identify the module that owns the behavior. For community, also read `docs/architecture/community.md`, ADR 0002, and the pilot guide; community publication never reuses personal-library replication.
 2. Read installed Next.js documentation for the API being changed. Inspect installed library types for RxDB, Dexie, Serwist, and tus rather than guessing APIs. Keep the direct Dexie dependency pinned to the version required by RxDB’s adapter (currently 4.4.2); two Dexie runtimes in the same bundle break initialization. Check `pnpm why dexie` when upgrading either package.
 3. Write down the expected behavior and failure modes. Preserve local edits, account separation, quota enforcement, and existing records.
 4. Change the narrowest owning module. Add a small service/adapter if a new external integration is needed; do not bury it in a component.
@@ -16,6 +16,7 @@
 - `pnpm dev`: local development; service workers are registered only in production.
 - `pnpm check`: architecture boundaries, formatting of the offline modules, typecheck, lint, server regression tests.
 - `pnpm build`: production Next.js and Serwist output.
+- `pnpm test:community`: isolated migration, membership, privacy, moderation, and publication regression checks.
 - `pnpm test:e2e`: isolated production browser checks against a staged standalone release; see `playwright.config.ts`.
 
 ## Changing persistence
