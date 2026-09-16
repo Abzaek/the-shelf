@@ -1,5 +1,6 @@
 "use client";
 
+import { ensureStreamIteration } from "./stream-compat";
 import { pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
@@ -8,6 +9,7 @@ let configured = false;
 /** Configure the pdf.js worker exactly once (client only). */
 export function ensurePdfWorker(): typeof pdfjs {
   if (!configured && typeof window !== "undefined") {
+    ensureStreamIteration();
     pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
     configured = true;
   }

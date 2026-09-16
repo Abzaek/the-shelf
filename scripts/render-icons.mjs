@@ -1,7 +1,7 @@
 // Renders the bookshelf icon to PNG without any image library:
 // shapes are rasterized with 4x supersampling and encoded via zlib.
 import { deflateSync } from "node:zlib";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 const SHAPES = [
   // x, y, w, h, radius, color, rotation(deg) about bottom-center
@@ -75,4 +75,7 @@ function render(size) {
 
 writeFileSync("src/app/apple-icon.png", render(180));
 writeFileSync("src/app/icon1.png", render(192));
+mkdirSync("public/icons", { recursive: true });
+writeFileSync("public/icons/icon-192.png", render(192));
+writeFileSync("public/icons/icon-512.png", render(512));
 console.log("icons rendered");

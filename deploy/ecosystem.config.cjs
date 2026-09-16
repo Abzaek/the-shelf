@@ -31,7 +31,7 @@ module.exports = {
         HOSTNAME: "127.0.0.1",
         SHELF_DATA_DIR: "/srv/shelf-data",
         SHELF_TOTAL_QUOTA_BYTES: String(10 * 1024 ** 3),
-        SHELF_USER_QUOTA_BYTES: String(250 * 1024 ** 2),
+        SHELF_USER_QUOTA_BYTES: String(50 * 1024 ** 2),
         SHELF_REGISTRATION: "open",
         SHELF_APP_URL: "https://shelf.abzaek.dev",
         SHELF_EMAIL_FROM: "The Shelf <shelf@abzaek.dev>",

@@ -14,9 +14,8 @@ import type {
 /**
  * Storage contract for The Shelf.
  *
- * The UI talks only to this interface. Today it is backed by IndexedDB
- * (see ./indexedDbStorage.ts); a SQLite-backed implementation can be dropped
- * in later without touching components or hooks.
+ * The UI talks only to this interface. The local adapter in ./local/bookStorage.ts persists metadata through RxDB
+ * and files through Dexie. Replication is an independent lifecycle.
  */
 export interface BookStorage {
   // Books

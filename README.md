@@ -2,7 +2,7 @@
 
 A private, personal digital bookshelf for the PDFs and EPUBs you own. Open The Shelf, browse your books, pick one, read.
 
-Books, covers, notes, bookmarks and reading progress live on the server, per account. Sign up with an email and password; each account gets its own quota (250 MB by default), and the whole store has a hard cap (10 GB by default). Nothing is shared between accounts.
+Books, notes, bookmarks, collections and progress save on the device first and synchronize to your private account. Downloaded PDFs and EPUBs work offline after the first online setup. Hosted files have a 50 MiB default allowance per account and a 10 GiB whole-store cap; optional Google Drive books stay in the reader’s own Drive. Account libraries remain private.
 
 ## Run it
 
@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-Then open http://localhost:3000 and create the first account (it becomes the admin). Data goes to `./.data` in development; see `.env.example` for the knobs. `pnpm build && pnpm start` serves a production build.
+Then open http://localhost:3000 and create an account (the configured `SHELF_SUPERADMIN_EMAIL` receives the super-admin role). Data goes to `./.data` in development; see `.env.example` for the knobs. `pnpm build && pnpm start` serves a production build.
 
 The `predev` / `prebuild` scripts copy the pdf.js worker that matches the installed `pdfjs-dist` into `public/pdf.worker.min.mjs`.
 
@@ -31,7 +31,7 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 | --- | --- | --- |
 | `SHELF_DATA_DIR` | `./.data` | SQLite file + uploaded files |
 | `SHELF_SESSION_SECRET` | — | Required in production, ≥ 32 chars |
-| `SHELF_USER_QUOTA_BYTES` | 250 MB | Per-account cap |
+| `SHELF_USER_QUOTA_BYTES` | 50 MiB | Hosted files and covers per account |
 | `SHELF_TOTAL_QUOTA_BYTES` | 10 GB | Whole-store cap |
 | `SHELF_REGISTRATION` | `open` | Default for sign-up; admins can flip it at runtime |
 | `SHELF_SUPERADMIN_EMAIL` | `abzaeko@gmail.com` | The one account that manages admins |
@@ -44,7 +44,7 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 
 Three roles: `user`, `admin`, `superadmin`. The super admin is pinned to `SHELF_SUPERADMIN_EMAIL` (default `abzaeko@gmail.com`): that account gets the role automatically when it registers, can't be demoted, disabled or deleted, and is the only one who can promote or demote admins. Admins can see `/admin` (analytics) and `/admin/users` (accounts): set quotas, mark emails verified, disable/enable, sign out everywhere, delete readers, and toggle registration at runtime. Every admin action is written to an audit log shown on the page. All admin pages and `/api/admin/*` routes check the role server-side.
 
-New accounts receive a confirmation link (valid 24 h, single-use). Until confirmed, the account can sign in but every library route returns 403 and the app shows a "check your inbox" screen with a resend button (3 per hour).
+When email verification is enabled, new accounts receive a confirmation link (valid 24 h, single-use). Until confirmed, the account can sign in but every library route returns 403 and the app shows a "check your inbox" screen with a resend button (3 per hour).
 
 ### Keyboard shortcuts in the reader
 
@@ -60,7 +60,7 @@ New accounts receive a confirmation link (valid 24 h, single-use). Until confirm
 
 ## Deploying
 
-Every push runs CI (typecheck, lint, build). Pushes to `main` that pass are deployed by the same workflow: the standalone build is rsynced to the server as a new release, `deploy/activate.sh` swaps in the Linux `better-sqlite3` build, flips the `current` symlink, reloads pm2, health-checks, and rolls back the symlink if the new release doesn't answer. `./deploy/deploy.sh` does the same from a workstation. Secrets live on the server in `shelf.env`; the workflow only needs an SSH deploy key.
+Every push runs CI (architecture boundaries, formatting, typecheck, lint, server tests, build, and production browser tests). Pushes to `main` that pass are deployed by the same workflow: the standalone build is rsynced to the server as a new release, `deploy/activate.sh` swaps in the Linux `better-sqlite3` build, flips the `current` symlink, reloads pm2, health-checks, and rolls back the symlink if the new release doesn't answer. `./deploy/deploy.sh` does the same from a workstation. Secrets live on the server in `shelf.env`; the workflow only needs an SSH deploy key.
 
 ## Architecture
 
@@ -81,17 +81,19 @@ src/
   hooks/               useBooks, useBookmarks, useNotes, useReadingProgress, useCoverUrl…
   server/              env, SQLite, auth/sessions, file store + quotas, user-scoped repo
   lib/
-    storage/           BookStorage interface + HTTP implementation
+    storage/           BookStorage interface + local RxDB/Dexie implementation
     pdf/               pdf.js setup, metadata, thumbnails, outline, text search, placeholder generator
     epub/              epub.js setup, metadata, cover, TOC, locations cache, text search
+    sync/              RxDB replication, protocol, conflicts, tus transfers
+    drive/             Google Picker adapter
     backup/            versioned export / import (JSON and zip)
     utils/
   types/               data model
 ```
 
-The UI never talks to the API directly. Everything goes through the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `httpStorage.ts`. Storage changes are broadcast through a tiny event bus so hooks refresh automatically.
+Library and reader UI use the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `local/bookStorage.ts`. Auth, installation, and Drive use small feature services. RxDB owns durable replication, checkpoints, retries, and tab leadership; the server applies authenticated compare-and-swap writes. Storage events refresh views automatically. The old HTTP adapter remains for compatibility, but it is not the normal reader data path.
 
-**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Every table is scoped by `user_id` and every route resolves the session before touching data. Files are stored at `<SHELF_DATA_DIR>/users/<userId>/<bookId>.<pdf|epub>` and streamed back with HTTP Range support. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
+**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Every table is scoped by `user_id` and every route resolves the session before touching data. Hosted files use immutable revisions under `<SHELF_DATA_DIR>/users/<userId>/` and stream with HTTP Range support; existing legacy file paths remain readable. Resumable tus uploads stage separately until validated completion. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
 
 Shelf cards only load the small cover thumbnail; the full file is fetched only when the reader opens.
 
@@ -99,4 +101,12 @@ Not supported: MOBI / AZW3 / KFX. Convert those to EPUB first (e.g. with Calibre
 
 ## Stack
 
-Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide · react-pdf / pdf.js · epub.js · better-sqlite3 · zod · fflate · sonner · next-themes
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide · react-pdf / pdf.js · epub.js · RxDB / Dexie · Serwist · tus · better-sqlite3 · zod · fflate · sonner · next-themes
+
+## Offline personal reading
+
+The Shelf now uses account-scoped local storage and RxDB synchronization. Install the app from your browser, download books in Settings or book details, and keep reading offline. Imports and edits save on the device before synchronizing; keep the app open while files upload. Hosted storage defaults to 50 MiB per account. Google Drive is optional and requires operator configuration.
+
+Contributor entry point: [AGENTS.md](AGENTS.md). Read the [architecture](docs/architecture/overview.md), [offline protocol](docs/architecture/offline-sync.md), [change workflow](docs/contributing.md), and [Drive setup](docs/google-drive-setup.md) before making changes. Community and author commerce are outside this release.
+
+Verification details and manual coverage limits: [offline reading test report](docs/testing/offline-reading-2026-09-16.md).

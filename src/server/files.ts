@@ -2,7 +2,9 @@ import "server-only";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
+import { randomUUID } from "node:crypto";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { getDb } from "./db";
 import { env } from "./env";
@@ -53,9 +55,15 @@ export interface UsageInfo {
 
 export function userUsage(userId: string, quotaBytes: number): UsageInfo {
   const db = getDb();
-  const used = (db.prepare("SELECT COALESCE(SUM(file_size + cover_size), 0) AS n FROM books WHERE user_id = ?").get(userId) as { n: number }).n;
-  const total = (db.prepare("SELECT COALESCE(SUM(file_size + cover_size), 0) AS n FROM books").get() as { n: number }).n;
+  const used = (db.prepare("SELECT COALESCE(SUM(CASE WHEN json_extract(sync_extra, '$.fileSource') = 'drive' THEN cover_size ELSE file_size + cover_size END), 0) AS n FROM books WHERE user_id = ?").get(userId) as { n: number }).n;
+  const total = (db.prepare("SELECT COALESCE(SUM(CASE WHEN json_extract(sync_extra, '$.fileSource') = 'drive' THEN cover_size ELSE file_size + cover_size END), 0) AS n FROM books").get() as { n: number }).n;
   return { usedBytes: used, quotaBytes, totalUsedBytes: total, totalQuotaBytes: env.totalQuotaBytes };
+}
+
+/** Final check inside the same SQLite transaction that commits the recorded byte count. */
+export function assertCommittedQuota(userId: string, quotaBytes: number, bytes: number): void {
+  const usage = userUsage(userId, quotaBytes);
+  if (usage.usedBytes + bytes > quotaBytes || usage.totalUsedBytes + bytes > env.totalQuotaBytes) throw new QuotaError("Not enough hosted storage. Your local file has been kept.");
 }
 
 /** Throws QuotaError when adding `bytes` would exceed the user's, the store's, or the disk's limits. */
@@ -85,29 +93,20 @@ export async function assertQuota(userId: string, quotaBytes: number, bytes: num
 /** Streams a web ReadableStream to disk, enforcing a byte ceiling. Returns bytes written. */
 export async function writeStream(target: string, body: ReadableStream<Uint8Array>, maxBytes: number): Promise<number> {
   await fsp.mkdir(path.dirname(target), { recursive: true });
-  const tmp = `${target}.${process.pid}.part`;
-  const out = fs.createWriteStream(tmp, { mode: 0o640 });
+  const tmp = `${target}.${randomUUID()}.part`;
   let written = 0;
   try {
-    const reader = body.getReader();
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      written += value.byteLength;
-      if (written > maxBytes) {
-        await reader.cancel();
-        throw new QuotaError(`Upload exceeds the ${formatBytes(maxBytes)} limit.`);
-      }
-      if (!out.write(value)) await new Promise<void>((r) => out.once("drain", () => r()));
-    }
-    await new Promise<void>((resolve, reject) => {
-      out.end(() => resolve());
-      out.on("error", reject);
+    const ceiling = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        written += chunk.byteLength;
+        if (written > maxBytes) callback(new QuotaError(`Upload exceeds the ${formatBytes(maxBytes)} limit.`));
+        else callback(null, chunk);
+      },
     });
+    await pipeline(Readable.fromWeb(body as unknown as NodeReadableStream<Uint8Array>), ceiling, fs.createWriteStream(tmp, { mode: 0o640 }));
     await fsp.rename(tmp, target);
     return written;
   } catch (err) {
-    out.destroy();
     await fsp.rm(tmp, { force: true });
     throw err;
   }

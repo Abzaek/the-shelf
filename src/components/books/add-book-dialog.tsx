@@ -158,17 +158,17 @@ export function AddBookDialog() {
   return (
     <Dialog open={addBookOpen} onOpenChange={setAddBookOpen}>
       <DialogContent
-        className={cn("gap-0 p-0 sm:max-w-lg", step === "details" && "sm:max-w-3xl")}
+        className={cn("flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg", step === "details" && "sm:max-w-3xl")}
         onInteractOutside={(e) => {
           if (step === "details") e.preventDefault();
         }}
       >
-        <DialogHeader className="px-6 pt-6">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle className="font-serif text-[22px] font-medium tracking-tight">Add a book</DialogTitle>
           <DialogDescription>
             {step === "details"
               ? "Check the details before it goes on the shelf."
-              : "Add a PDF or EPUB you own. It’s stored in your account."}
+              : "Add a PDF or EPUB you own. It saves on this device, then syncs to your account."}
           </DialogDescription>
         </DialogHeader>
 
@@ -245,13 +245,13 @@ export function AddBookDialog() {
 
         {step === "details" && file && (
           <form
-            className="flex flex-col"
+            className="flex min-h-0 flex-1 flex-col"
             onSubmit={(e) => {
               e.preventDefault();
               void save();
             }}
           >
-            <div className="grid gap-6 px-6 pt-5 pb-2 sm:grid-cols-[200px_1fr]">
+            <div className="grid min-h-0 gap-6 overflow-y-auto px-6 pt-5 pb-4 sm:grid-cols-[200px_1fr]">
               <div className="space-y-4">
                 <CoverPicker
                   title={values.title}
@@ -270,11 +270,11 @@ export function AddBookDialog() {
                   </p>
                 </div>
               </div>
-              <div className="max-h-[55vh] overflow-y-auto pr-1 scroll-thin sm:max-h-none">
+              <div className="min-w-0 pr-1">
                 <BookFormFields values={values} onChange={(p) => setValues((v) => ({ ...v, ...p }))} idPrefix="add" autoFocusTitle />
               </div>
             </div>
-            <DialogFooter className="border-t border-border/70 px-6 py-4 sm:justify-between">
+            <DialogFooter className="mx-0 mb-0 shrink-0 border-t border-border/70 px-6 py-4 sm:justify-between">
               <Button type="button" variant="ghost" onClick={reset} disabled={saving}>
                 <ArrowLeft aria-hidden data-icon="inline-start" /> Different file
               </Button>

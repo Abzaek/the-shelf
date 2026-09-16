@@ -1,6 +1,7 @@
 "use client";
 
-import { ApiError } from "@/lib/storage";
+import { ApiError } from "@/lib/storage/httpStorage";
+import { unlockSession } from "@/lib/storage/local/session";
 
 export interface SessionUser {
   id: string;
@@ -42,12 +43,12 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
 export const authClient = {
   session: async (): Promise<SessionInfo> => {
     const res = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
-    if (!res.ok) return { user: null, usage: null, registrationOpen: true, emailVerificationRequired: false };
+    if (!res.ok) throw new ApiError(res.status, "Could not check your session.");
     return res.json();
   },
-  login: (email: string, password: string) => post<{ user: SessionUser }>("/api/auth/login", { email, password }),
+  login: (email: string, password: string) => post<{ user: SessionUser }>("/api/auth/login", { email, password }).then(result => { unlockSession(); return result; }),
   register: (email: string, password: string, displayName: string) =>
-    post<{ user: SessionUser }>("/api/auth/register", { email, password, displayName }),
+    post<{ user: SessionUser }>("/api/auth/register", { email, password, displayName }).then(result => { unlockSession(); return result; }),
   logout: () => post<{ ok: true }>("/api/auth/logout"),
   verifyEmail: (token: string) => post<{ user: SessionUser }>("/api/auth/verify", { token }),
   resendVerification: () => post<{ ok: true; alreadyVerified?: boolean }>("/api/auth/resend-verification"),

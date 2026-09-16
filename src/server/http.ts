@@ -33,11 +33,23 @@ export async function requireUser({ verified = true }: { verified?: boolean } = 
 }
 
 /** Parse and validate a JSON body; throws 400 on failure. */
-export async function readJson<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
+export async function readJson<T>(request: Request, schema: z.ZodType<T>, maxBytes = 4_000_000): Promise<T> {
   let raw: unknown;
   try {
-    raw = await request.json();
-  } catch {
+    if (!request.body) throw new HttpError(400, "Missing JSON body.");
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); throw new HttpError(413, "Request body is too large."); }
+      chunks.push(value);
+    }
+    raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     throw new HttpError(400, "Invalid JSON body.");
   }
   const parsed = schema.safeParse(raw);

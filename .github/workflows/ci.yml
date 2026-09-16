@@ -21,9 +21,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm exec eslint src
+      - run: pnpm check
       - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm test:e2e
       - name: Stage release
         # Tarball keeps pnpm's node_modules symlinks; upload-artifact alone would flatten them.
         run: bash deploy/stage.sh release && tar -czf release.tgz -C release .

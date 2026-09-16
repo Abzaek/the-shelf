@@ -17,10 +17,10 @@ export const env = {
   sessionSecret: process.env.SHELF_SESSION_SECRET ?? "",
   /** Whole-store hard cap in bytes (all users). Default 10 GB. */
   totalQuotaBytes: int("SHELF_TOTAL_QUOTA_BYTES", 10 * 1024 ** 3),
-  /** Per-user cap in bytes. Default 250 MB. */
-  userQuotaBytes: int("SHELF_USER_QUOTA_BYTES", 250 * 1024 ** 2),
+  /** Per-user cap in bytes. Default 50 MB. */
+  userQuotaBytes: int("SHELF_USER_QUOTA_BYTES", 50 * 1024 ** 2),
   /** Largest single upload accepted. Default = user quota. */
-  maxUploadBytes: int("SHELF_MAX_UPLOAD_BYTES", int("SHELF_USER_QUOTA_BYTES", 250 * 1024 ** 2)),
+  maxUploadBytes: int("SHELF_MAX_UPLOAD_BYTES", int("SHELF_USER_QUOTA_BYTES", 50 * 1024 ** 2)),
   /** Refuse uploads when the disk holding dataDir has less free space than this. Default 1 GB. */
   minFreeDiskBytes: int("SHELF_MIN_FREE_DISK_BYTES", 1024 ** 3),
   /** Allow anyone to create an account. */

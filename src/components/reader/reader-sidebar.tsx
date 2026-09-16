@@ -241,6 +241,7 @@ function NotesPanel({ notes, currentPage, goToPage, onAddNote, onUpdateNote, onD
                   </Button>
                 </div>
               </div>
+              {!!n.conflictCopies?.length && <details className="my-2 rounded border p-2 text-sm"><summary className="cursor-pointer">Edits preserved from another device</summary>{n.conflictCopies.map((copy, index) => <p className="mt-2 whitespace-pre-wrap" key={index}>{copy}</p>)}</details>}
               {editingId === n.id ? (
                 <form
                   className="mt-1.5 space-y-1.5"

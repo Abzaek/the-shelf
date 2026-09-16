@@ -22,8 +22,10 @@ const EpubReader = dynamic(() => import("./epub-reader").then((m) => m.EpubReade
 export function ReaderRoute({ bookId }: { bookId: string }) {
   const { books, booksLoading, settings, settingsLoaded } = useLibrary();
   const book = books.find((b) => b.id === bookId);
-  const [file, setFile] = useState<Blob | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const identity = `${book?.id}:${book?.fileRevision}`;
+  const [loaded, setLoaded] = useState<{ identity: string; file?: Blob; error?: string } | null>(null);
+  const file = loaded?.identity === identity ? loaded.file : undefined;
+  const error = loaded?.identity === identity ? loaded.error : undefined;
 
   useEffect(() => {
     if (!book) return;
@@ -32,16 +34,16 @@ export function ReaderRoute({ bookId }: { bookId: string }) {
       .getFile(book.fileId)
       .then((blob: Blob | undefined) => {
         if (!active) return;
-        if (!blob) setError("The file for this book is missing. Open the book's details and attach it again.");
-        else setFile(blob);
+        if (!blob) setLoaded({ identity, error: "The file for this book is missing. Open the book's details and attach it again." });
+        else setLoaded({ identity, file: blob });
       })
-      .catch((err: unknown) => active && setError(err instanceof Error ? err.message : "Could not load the book file."));
+      .catch((err: unknown) => active && setLoaded({ identity, error: err instanceof Error ? err.message : "Could not load the book file." }));
     return () => {
       active = false;
     };
     // Load the file once per book; metadata updates should not re-fetch the blob.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id]);
+  }, [book?.id, book?.fileRevision]);
 
   if (booksLoading || !settingsLoaded) return <ReaderLoading />;
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { eraseDeletedAccount } from "@/lib/storage/local/runtime";
+import { OfflineSettings } from "@/components/offline/offline-settings";
 import { useRef, useState } from "react";
 import { Download, FileArchive, LogOut, Moon, Sun, SunMoon, Trash2, Upload, Sparkles } from "lucide-react";
 import { ProgressBar } from "@/components/books/progress-bar";
@@ -149,7 +151,10 @@ export function SettingsPage() {
   const deleteAccount = async () => {
     setDeleting(true);
     try {
+      const deletedUserId = user?.id;
       await authClient.deleteAccount(deletePassword);
+      await signOut();
+      if (deletedUserId) await eraseDeletedAccount(deletedUserId);
       toast("Account deleted");
       router.replace("/login");
     } catch (err) {
@@ -175,6 +180,7 @@ export function SettingsPage() {
       <h1 className="font-serif text-[28px] font-medium leading-none tracking-tight sm:text-[32px]">Settings</h1>
       <p className="mt-2 mb-10 text-sm text-muted-foreground">Your books live on the server, in your account. Back up now and then anyway.</p>
 
+      <OfflineSettings />
       <Section title="Appearance">
         <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2 sm:max-w-md">
           {(
