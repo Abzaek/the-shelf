@@ -22,7 +22,7 @@ Module._load = function(id, parent, isMain) {
   return originalLoad.call(this, id, parent, isMain);
 };
 Module._extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, filename);
-const { getDb } = require('../src/server/db.ts');
+const { getDb, MIGRATIONS } = require('../src/server/db.ts');
 const { recordActivity, readingPulse } = require('../src/server/analytics/tracking.ts');
 const { getAnalytics, getUserAnalytics } = require('../src/server/analytics/report.ts');
 const { createUser, createSession } = require('../src/server/auth.ts');
@@ -32,13 +32,14 @@ const { POST } = require('../src/app/api/analytics/route.ts');
 const db = getDb();
 const scalar = sql => Object.values(db.prepare(sql).get())[0];
 async function run() {
-  assert.equal(scalar('SELECT COUNT(*) FROM schema_migrations'), 3, 'additive migration applied');
+  assert.equal(scalar('SELECT COUNT(*) FROM schema_migrations'), MIGRATIONS.length, 'additive migration applied');
   db.prepare("UPDATE analytics_meta SET value=? WHERE key='started_at'").run('2026-01-01T00:00:00.000Z');
   const empty=getAnalytics({start:'2026-01-01',end:'2026-01-01',bucket:'day',active:7,inactive:30,dormant:90});
   assert.equal(empty.totals.users,0);
   assert.equal(empty.current.active,0);
   assert.equal(empty.cohorts.length,0);
   const admin = await createUser('admin@example.test', 'test-password-123', 'Admin');
+  db.prepare("UPDATE users SET role='admin' WHERE id=?").run(admin.id);
   const user = await createUser('reader@example.test', 'test-password-123', 'Reader');
   assert.equal(scalar('SELECT COUNT(*) FROM analytics_daily_users'), 0, 'registration alone is not meaningful engagement');
   recordActivity(admin.id, 'login');

@@ -13,6 +13,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = request.cookies.has(SESSION_COOKIE);
   const isPublic = PUBLIC.includes(pathname);
+  if (pathname === "/offline" || pathname.startsWith("/serwist/")) return NextResponse.next();
 
   // Verification links may be opened in a browser without a session; send them to sign in and back.
   if (!hasSession && pathname === VERIFY) {
@@ -27,12 +28,7 @@ export function proxy(request: NextRequest) {
     url.search = pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : "";
     return NextResponse.redirect(url);
   }
-  if (hasSession && isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
+
   return NextResponse.next();
 }
 

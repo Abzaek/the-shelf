@@ -1,3 +1,4 @@
+import { removeAccountUploads } from "@/server/sync/maintenance";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { deleteAllSessions, findUserByEmail, SESSION_COOKIE, verifyPassword } from "@/server/auth";
@@ -11,6 +12,7 @@ export const DELETE = handler(async (request) => {
   const { password } = await readJson(request, z.object({ password: z.string().max(200) }));
   const record = findUserByEmail(user.email);
   if (!record || !(await verifyPassword(password, record.passwordHash))) throw new HttpError(403, "Password is incorrect.");
+  removeAccountUploads(user.id);
   deleteAllSessions(user.id);
   getDb().prepare("DELETE FROM users WHERE id = ?").run(user.id);
   await removeUserDir(user.id);

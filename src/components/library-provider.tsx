@@ -1,11 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import type { Book, Collection, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { storage, storageEvents } from "@/lib/storage";
+import { activateLibrary, deactivateLibrary, currentUserId } from "@/lib/storage/local/runtime";
+import { cachedSession, saveSession, lockSession, isLocallySignedOut } from "@/lib/storage/local/session";
+import { syncStatus } from "@/lib/sync/status";
 import { authClient, type SessionUser, type Usage } from "@/lib/auth-client";
 
 interface LibraryContextValue {
@@ -44,6 +47,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isOfflineShell = pathname === "/offline";
   const isVerifyPage = pathname === VERIFY_PATH;
 
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -65,27 +69,50 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
 
   const { setTheme: applyTheme } = useTheme();
+  const sessionGeneration = useRef(0);
 
   const refreshSession = useCallback(async () => {
+    const generation = ++sessionGeneration.current;
     try {
-      const info = await authClient.session();
+      if (isLocallySignedOut()) { setUser(null); return; }
+      let info;
+      try {
+        info = await authClient.session();
+        if (!info.user) {
+          const cached = cachedSession();
+          if (cached) { info = cached; syncStatus.set({ phase: "sign-in" }); }
+        } else saveSession(info);
+      } catch (error) {
+        info = cachedSession();
+        if (!info) throw error;
+      }
+      if (generation !== sessionGeneration.current || isLocallySignedOut()) return;
+      if (info.user && (!info.emailVerificationRequired || info.user.emailVerified)) {
+        if (currentUserId() !== info.user.id) { setBooks([]); setCollections([]); setSettings(DEFAULT_SETTINGS); setBooksLoading(true); setSettingsLoaded(false); }
+        await activateLibrary(info.user.id);
+      }
+      if (generation !== sessionGeneration.current || isLocallySignedOut()) return;
       setUser(info.user);
       setUsage(info.usage);
       setVerificationRequired(info.emailVerificationRequired);
-    } catch {
+    } catch (error) {
+      if (generation !== sessionGeneration.current) return;
+      setBooksError(error instanceof Error ? error : new Error("Could not open local storage."));
       setUser(null);
       setUsage(null);
     } finally {
-      setAuthLoading(false);
+      if (generation === sessionGeneration.current) setAuthLoading(false);
     }
   }, []);
 
   const refreshBooks = useCallback(async () => {
     try {
+      const account = currentUserId();
       const list = await storage.getBooks();
+      if (account !== currentUserId()) return;
       setBooks(list.sort((a, b) => a.title.localeCompare(b.title)));
       setBooksError(null);
-      authClient.usage().then(setUsage).catch(() => null);
+      authClient.usage().then(value => { if (account === currentUserId()) setUsage(value); }).catch(() => null);
     } catch (err) {
       setBooksError(err instanceof Error ? err : new Error(String(err)));
     } finally {
@@ -95,7 +122,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const refreshCollections = useCallback(async () => {
     try {
-      setCollections(await storage.getCollections());
+      const account = currentUserId();
+      const list = await storage.getCollections();
+      if (account === currentUserId()) setCollections(list);
     } catch {
       /* handled by auth redirect */
     } finally {
@@ -105,7 +134,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const refreshSettings = useCallback(async () => {
     try {
-      setSettings(await storage.getSettings());
+      const account = currentUserId();
+      const loaded = await storage.getSettings();
+      if (account !== currentUserId()) return;
+      setSettings(loaded);
       setSettingsLoaded(true);
     } catch {
       /* handled by auth redirect */
@@ -121,7 +153,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      if (!isPublic && !isVerifyPage) router.replace(`/login${pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""}`);
+      if (!isPublic && !isVerifyPage && !isOfflineShell) router.replace(`/login${pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""}`);
       return;
     }
     const needsVerification = verificationRequired && !user.emailVerified;
@@ -129,10 +161,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (!isVerifyPage) router.replace(VERIFY_PATH);
       return;
     }
-    if (isPublic) {
-      router.replace("/");
-      return;
-    }
+    if (isPublic) return;
     if (isVerifyPage && !window.location.search.includes("token=")) {
       router.replace("/");
       return;
@@ -146,13 +175,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (topic === "books") void refreshBooks();
       if (topic === "collections") void refreshCollections();
       if (topic === "settings") void refreshSettings();
-      if (topic === "auth") {
-        setUser(null);
-        setUsage(null);
-      }
+      if (topic === "auth") syncStatus.set({ phase: "sign-in" });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, user?.emailVerified, verificationRequired, isPublic, isVerifyPage]);
+  }, [authLoading, user?.id, user?.emailVerified, verificationRequired, isPublic, isVerifyPage, isOfflineShell]);
+
+  useEffect(() => {
+    const changed = () => { if (isLocallySignedOut()) { ++sessionGeneration.current; void deactivateLibrary(); setUser(null); setBooks([]); setCollections([]); setSettingsLoaded(false); } else void refreshSession(); };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, [refreshSession]);
 
   useEffect(() => {
     if (settingsLoaded) applyTheme(settings.theme);
@@ -164,6 +196,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    ++sessionGeneration.current;
+    lockSession();
+    await deactivateLibrary();
     await authClient.logout().catch(() => null);
     setUser(null);
     setUsage(null);

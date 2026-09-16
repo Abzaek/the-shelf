@@ -1,3 +1,6 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/fraunces/wght-italic.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -54,6 +57,8 @@
 }
 
 :root {
+  --font-geist: "Geist Variable";
+  --font-fraunces: "Fraunces Variable";
   --background: oklch(0.972 0.009 85);
   --foreground: oklch(0.23 0.018 60);
   --card: oklch(0.985 0.006 85);

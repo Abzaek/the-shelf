@@ -1,5 +1,6 @@
 "use client";
 
+import { BookDownload } from "@/components/offline/book-download";
 import { useState } from "react";
 import Link from "next/link";
 import { BookOpen, Bookmark, Check, ChevronDown, Library, Pencil, StickyNote, Trash2 } from "lucide-react";
@@ -115,6 +116,8 @@ export function BookDetailsDialog() {
                   <ProgressBar value={book.progress} size="sm" />
                 </div>
 
+                <div className="mt-4"><BookDownload book={book} /></div>
+                {Object.keys(book.readingPositions ?? {}).length > 1 && <details className="mt-3 text-sm"><summary className="cursor-pointer">Saved positions on your devices</summary>{Object.entries(book.readingPositions ?? {}).map(([device, position]) => <Button key={device} size="sm" variant="ghost" onClick={() => void storage.saveProgress(book.id, position)}>{book.format === "epub" ? "Location" : "Page"} {position.currentPage} · {new Date(position.updatedAt).toLocaleDateString()}</Button>)}</details>}
                 {/* Actions */}
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Button asChild size="lg" className="px-4" disabled={pdfMissing}>

@@ -9,7 +9,7 @@ import { analyticsMigration } from "./analytics/schema";
  * SQLite connection (one per process). WAL mode so reads never block writes.
  * Schema changes are applied as numbered migrations tracked in `schema_migrations`.
  */
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `
   CREATE TABLE users (
     id TEXT PRIMARY KEY,
@@ -121,6 +121,39 @@ const MIGRATIONS: string[] = [
     detail TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
   );
+  `,
+  `
+  ALTER TABLE books ADD COLUMN sync_extra TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE notes ADD COLUMN conflict_copies TEXT NOT NULL DEFAULT '[]';
+  CREATE TABLE sync_documents (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    document TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (user_id, id)
+  );
+  CREATE INDEX sync_documents_checkpoint ON sync_documents(user_id, sequence);
+  CREATE TABLE sync_clock (id INTEGER PRIMARY KEY CHECK(id = 1), sequence INTEGER NOT NULL);
+  INSERT INTO sync_clock VALUES (1, 0);
+  CREATE TABLE drive_connections (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    tokens TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE file_uploads (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    book_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    revision TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    growth INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE UNIQUE INDEX file_uploads_revision ON file_uploads(user_id,book_id,kind,revision);
+  UPDATE users SET quota_bytes = 52428800 WHERE quota_bytes = 262144000;
   `,
 ];
 

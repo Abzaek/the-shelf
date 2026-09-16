@@ -1,6 +1,8 @@
+import { getDb } from "@/server/db";
+import { env } from "@/server/env";
 import { z } from "zod";
 import { books } from "@/server/repo";
-import { assertQuota, bookFilePath, coverPath, removeFile, writeBuffer, writeStream } from "@/server/files";
+import { assertCommittedQuota, assertQuota, bookFilePath, coverPath, removeFile, writeBuffer, writeStream } from "@/server/files";
 import { handler, HttpError, json, requireUser } from "@/server/http";
 import { createId } from "@/lib/utils/id";
 import { READING_STATUSES, type ReadingStatus } from "@/types";
@@ -55,6 +57,8 @@ export const POST = handler(async (request) => {
   const meta = parsed.data;
   if (meta.id && books.get(user.id, meta.id)) throw new HttpError(409, "A book with that id already exists.");
 
+  if (cover && cover.size > 5 * 1024 ** 2) throw new HttpError(413, "Cover must be smaller than 5 MB.");
+  if (file.size > env.maxUploadBytes) throw new HttpError(413, "File exceeds the upload limit.");
   const coverBytes = cover ? new Uint8Array(await cover.arrayBuffer()) : null;
   await assertQuota(user.id, user.quotaBytes, file.size + (coverBytes?.byteLength ?? 0));
 
@@ -63,13 +67,16 @@ export const POST = handler(async (request) => {
   try {
     const written = await writeStream(filePath, file.stream(), file.size);
     if (coverBytes) await writeBuffer(coverPath(user.id, id), coverBytes);
-    let book = books.create(user.id, {
-      ...meta,
-      id,
-      fileSize: written,
-      coverKind: coverBytes ? (meta.coverKind === "custom" ? "custom" : "generated") : "none",
-      coverSize: coverBytes?.byteLength ?? 0,
-    });
+    let book = getDb().transaction(() => {
+      assertCommittedQuota(user.id, user.quotaBytes, written + (coverBytes?.byteLength ?? 0));
+      return books.create(user.id, {
+        ...meta,
+        id,
+        fileSize: written,
+        coverKind: coverBytes ? (meta.coverKind === "custom" ? "custom" : "generated") : "none",
+        coverSize: coverBytes?.byteLength ?? 0,
+      });
+    })();
     // Backup imports carry their own history.
     if (meta.currentCfi !== undefined || meta.lastOpenedAt !== undefined || meta.finishedAt !== undefined) {
       book =

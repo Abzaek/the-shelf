@@ -132,6 +132,8 @@ export function EpubReader({ book, file, settings }: EpubReaderProps) {
           if (cancelled) return;
           const cfi = loc.start?.cfi ?? null;
           setCurrentCfi(cfi);
+          // epub.js clears views on resize; wait until it has a location to redisplay.
+          setReady(true);
           setAtEnd(!!loc.atEnd);
           const total = epub?.locations.length() ?? 0;
           if (total && typeof loc.start?.location === "number" && loc.start.location >= 0) {
@@ -143,7 +145,6 @@ export function EpubReader({ book, file, settings }: EpubReaderProps) {
         const startAt = settings.rememberLastPage && book.status !== "finished" ? book.currentCfi ?? undefined : undefined;
         await rendition.display(startAt);
         if (cancelled) return;
-        setReady(true);
         setLoadError(null);
 
         // Locations (for progress and numbering); cached after the first open.

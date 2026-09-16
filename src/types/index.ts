@@ -34,7 +34,19 @@ export const FORMAT_ACCEPT: Record<BookFormat, { mime: string[]; ext: string }> 
   epub: { mime: ["application/epub+zip", "application/epub"], ext: ".epub" },
 };
 
+export interface ReadingPosition {
+  currentPage: number;
+  totalPages: number;
+  currentCfi: string | null;
+  updatedAt: string;
+}
+
 export interface Book {
+  fileSource?: "hosted" | "drive";
+  driveFileId?: string;
+  fileRevision?: string;
+  coverRevision?: string;
+  readingPositions?: Record<string, ReadingPosition>;
   id: string;
   format: BookFormat;
   title: string;
@@ -99,6 +111,8 @@ export interface Bookmark {
 }
 
 export interface Note {
+  /** Exact concurrent edits, retained until the reader explicitly resolves them. */
+  conflictCopies?: string[];
   id: string;
   bookId: string;
   page: number;

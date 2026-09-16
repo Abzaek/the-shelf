@@ -1,20 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
-
-const sans = Geist({ variable: "--font-geist", subsets: ["latin"] });
-const serif = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  axes: ["opsz", "SOFT"],
-  style: ["normal", "italic"],
-});
 
 export const metadata: Metadata = {
   title: { default: "The Shelf", template: "%s · The Shelf" },
   description: "A private, personal library for the books you own.",
   applicationName: "The Shelf",
+  appleWebApp: { capable: true, title: "The Shelf", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -29,7 +21,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>{children}</Providers>
       </body>

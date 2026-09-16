@@ -15,8 +15,14 @@ export function useCoverUrl(coverId: string | null | undefined, version?: string
       if (topic === "covers" && (!id || id === coverId)) setGen((g) => g + 1);
     });
   }, [coverId]);
-  if (!coverId) return null;
-  return storage.coverUrl(coverId, `${version ?? ""}-${gen}`);
+  const [entry, setEntry] = useState<{ id: string; blob: Blob | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (coverId) void storage.getCover(coverId).then(value => { if (live) setEntry({ id: coverId, blob: value ?? null }); }).catch(() => { if (live) setEntry(null); });
+    return () => { live = false; };
+  }, [coverId, version, gen]);
+  const url = useBlobUrl(entry && entry.id === coverId ? entry.blob : null);
+  return coverId ? url : null;
 }
 
 /** Object URL for a transient blob (e.g. an upload preview). Revoked on change/unmount. */

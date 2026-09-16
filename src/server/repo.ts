@@ -32,10 +32,17 @@ interface BookRow {
   updated_at: string;
   last_opened_at: string | null;
   finished_at: string | null;
+  sync_extra: string;
 }
 
 function toBook(r: BookRow): Book {
+  const extra = JSON.parse(r.sync_extra || "{}");
   return {
+    fileSource: extra.fileSource ?? "hosted",
+    fileRevision: extra.fileRevision ?? "legacy",
+    coverRevision: extra.coverRevision ?? "legacy",
+    readingPositions: extra.readingPositions ?? {},
+    ...(extra.driveFileId ? { driveFileId: extra.driveFileId } : {}),
     id: r.id,
     format: r.format as Book["format"],
     title: r.title,
@@ -48,7 +55,7 @@ function toBook(r: BookRow): Book {
     coverKind: r.cover_kind as Book["coverKind"],
     fileId: r.id,
     fileName: r.file_name,
-    fileSize: r.file_size,
+    fileSize: extra.expectedFileSize ?? r.file_size,
     totalPages: r.total_pages,
     currentPage: r.current_page,
     currentCfi: r.current_cfi,
@@ -61,7 +68,7 @@ function toBook(r: BookRow): Book {
 }
 
 const BOOK_COLUMNS = `id, user_id, format, title, author, description, category, tags, status, cover_kind, cover_size,
-  file_name, file_size, total_pages, current_page, current_cfi, progress, created_at, updated_at, last_opened_at, finished_at`;
+  file_name, file_size, total_pages, current_page, current_cfi, progress, created_at, updated_at, last_opened_at, finished_at, sync_extra`;
 
 export const books = {
   list(userId: string): Book[] {
@@ -225,8 +232,8 @@ export const bookmarks = {
 
 // ------------------------------------------------------------ notes
 
-interface NoteRow { id: string; book_id: string; page: number; cfi: string | null; content: string; created_at: string; updated_at: string }
-const toNote = (r: NoteRow): Note => ({ id: r.id, bookId: r.book_id, page: r.page, ...(r.cfi ? { cfi: r.cfi } : {}), content: r.content, createdAt: r.created_at, updatedAt: r.updated_at });
+interface NoteRow { id: string; book_id: string; page: number; cfi: string | null; content: string; created_at: string; updated_at: string; conflict_copies?: string }
+const toNote = (r: NoteRow): Note => ({ id: r.id, bookId: r.book_id, page: r.page, ...(r.cfi ? { cfi: r.cfi } : {}), content: r.content, conflictCopies: JSON.parse(r.conflict_copies || "[]"), createdAt: r.created_at, updatedAt: r.updated_at });
 
 export const notes = {
   list(userId: string, bookId: string): Note[] {
