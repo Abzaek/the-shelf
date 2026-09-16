@@ -89,7 +89,7 @@ test("download, cold offline launch, PDF reading, durable notes and reconnect", 
   await page.getByRole("button", { name: "Download for offline reading" }).click();
   await expect(page.getByRole("button", { name: "Remove download", exact: true })).toBeVisible();
   await setOffline(context, true);
-  await page.goto(`/read/${book.id}`);
+  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible();
   await openNotes(page);
   await page
@@ -184,7 +184,7 @@ test("offline import survives reload and uploads after reconnect", async ({ page
   await register(context);
   await ready(page);
   await setOffline(context, true);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page
     .getByRole("button", { name: /Add (a )?book/i })
     .first()
@@ -387,7 +387,7 @@ test("EPUB opens from a cold offline launch", async ({ page, context }) => {
   await page.getByRole("button", { name: "Download for offline reading" }).click();
   await expect(page.getByRole("button", { name: "Remove download", exact: true })).toBeVisible();
   await setOffline(context, true);
-  await page.goto(`/read/${book.id}`);
+  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
   await expect(
     page
       .frameLocator(".epub-view iframe")
