@@ -11,8 +11,16 @@ concurrency:
 
 jobs:
   check:
-    name: Typecheck, lint, build
-    runs-on: ubuntu-latest
+    name: Validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            projects: --project=chromium
+          - os: macos-15
+            projects: --project=webkit --project=iphone
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,19 +31,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build
-      - run: pnpm exec playwright install --with-deps chromium webkit
-      - run: pnpm test:e2e
+      - if: runner.os == 'Linux'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: runner.os == 'macOS'
+        run: pnpm exec playwright install webkit
+      - run: pnpm test:e2e ${{ matrix.projects }}
       - name: Preserve browser failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-failure-diagnostics
+          name: browser-failure-diagnostics-${{ matrix.os }}
           path: test-results/
           retention-days: 3
       - name: Stage release
+        if: runner.os == 'Linux'
         # Tarball keeps pnpm's node_modules symlinks; upload-artifact alone would flatten them.
         run: bash deploy/stage.sh release && tar -czf release.tgz -C release .
       - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
         with:
           name: release
           path: release.tgz
