@@ -113,6 +113,65 @@ test("download, cold offline launch, PDF reading, durable notes and reconnect", 
   expect(errors).toEqual([]);
 });
 
+test("stalled session checks fall back to the downloaded library", async ({ page, context }) => {
+  await register(context);
+  const book = await seed(context);
+  await ready(page);
+  await page.getByText("Downloads (1 books)", { exact: true }).click();
+  await page.getByRole("button", { name: "Download for offline reading" }).click();
+  await expect(page.getByRole("button", { name: "Remove download", exact: true })).toBeVisible();
+  // Model the WebKit failure deterministically: an auth request that never
+  // settles until the application aborts it, instead of immediately rejecting.
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (input, options) => {
+      if (input === "/api/auth/me") {
+        const check = { started: performance.now(), aborted: 0 };
+        Object.assign(window, { __stalledSessionCheck: check });
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = () => {
+            check.aborted = performance.now();
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+          if (options?.signal?.aborted) abort();
+          else options?.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      return originalFetch(input, options);
+    };
+  });
+  await setOffline(context, true);
+  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
+  // Check the request deadline independently from hydration/PDF rendering.
+  // The normal render allowance starts once local-library fallback can run.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const check = (
+          window as Window & {
+            __stalledSessionCheck?: { started: number; aborted: number };
+          }
+        ).__stalledSessionCheck;
+        return check?.aborted ? check.aborted - check.started : 0;
+      }),
+    )
+    .toBeGreaterThan(0);
+  const elapsed = await page.evaluate(() => {
+    const check = (
+      window as Window & {
+        __stalledSessionCheck?: { started: number; aborted: number };
+      }
+    ).__stalledSessionCheck;
+    return check ? check.aborted - check.started : Infinity;
+  });
+  expect(elapsed).toBeLessThan(10000);
+  await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible();
+  await openNotes(page);
+  await page.getByRole("textbox", { name: /Note for page/ }).fill("Recovered from stalled session");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(page.getByText("Recovered from stalled session", { exact: true })).toBeVisible();
+});
+
 test("offline import survives reload and uploads after reconnect", async ({ page, context }) => {
   await register(context);
   await ready(page);
