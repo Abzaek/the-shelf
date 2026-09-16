@@ -25,6 +25,13 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e
+      - name: Preserve browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-diagnostics
+          path: test-results/
+          retention-days: 3
       - name: Stage release
         # Tarball keeps pnpm's node_modules symlinks; upload-artifact alone would flatten them.
         run: bash deploy/stage.sh release && tar -czf release.tgz -C release .

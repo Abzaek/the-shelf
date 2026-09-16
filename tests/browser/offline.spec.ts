@@ -126,8 +126,13 @@ test("stalled session checks fall back to the downloaded library", async ({ page
     const originalFetch = window.fetch;
     window.fetch = (input, options) => {
       if (input === "/api/auth/me") {
+        const check = { started: performance.now(), aborted: 0 };
+        Object.assign(window, { __stalledSessionCheck: check });
         return new Promise<Response>((_resolve, reject) => {
-          const abort = () => reject(new DOMException("Aborted", "AbortError"));
+          const abort = () => {
+            check.aborted = performance.now();
+            reject(new DOMException("Aborted", "AbortError"));
+          };
           if (options?.signal?.aborted) abort();
           else options?.signal?.addEventListener("abort", abort, { once: true });
         });
@@ -137,6 +142,29 @@ test("stalled session checks fall back to the downloaded library", async ({ page
   });
   await setOffline(context, true);
   await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
+  // Check the request deadline independently from hydration/PDF rendering.
+  // The normal render allowance starts once local-library fallback can run.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const check = (
+          window as Window & {
+            __stalledSessionCheck?: { started: number; aborted: number };
+          }
+        ).__stalledSessionCheck;
+        return check?.aborted ? check.aborted - check.started : 0;
+      }),
+    )
+    .toBeGreaterThan(0);
+  const elapsed = await page.evaluate(() => {
+    const check = (
+      window as Window & {
+        __stalledSessionCheck?: { started: number; aborted: number };
+      }
+    ).__stalledSessionCheck;
+    return check ? check.aborted - check.started : Infinity;
+  });
+  expect(elapsed).toBeLessThan(10000);
   await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible();
   await openNotes(page);
   await page.getByRole("textbox", { name: /Note for page/ }).fill("Recovered from stalled session");
