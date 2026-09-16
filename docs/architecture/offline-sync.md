@@ -35,7 +35,7 @@ A first online visit and verified sign-in are required. Only downloaded books ar
 
 No auth, admin, API, or private file response is runtime-cached by the service worker. `/offline` contains no user data. IndexedDB is account-scoped. Explicit logout blocks cached identity restoration until another successful login. A cached identity never authorizes a server operation.
 
-Session checks have an eight-second deadline, including reading the response body. A stalled connection must release startup to the existing cached-identity fallback even if the browser reports online. This does not bypass server authentication or the local sign-out lock. Keep the stalled-session browser regression when changing startup or authentication.
+On initial startup, a prepared device opens its cached identity and local library before checking the server session. Explicit sign-out still blocks restoration. The background session check has an eight-second deadline, including reading the response body; it can update the account through the existing generation/account guards but cannot hold local reading hostage to a stalled connection. Cached identity never authorizes a server request. Keep the stalled-session browser regression, which verifies a downloaded PDF opens before that deadline, when changing startup or authentication.
 
 Document navigation uses Serwist's `NetworkOnly` strategy with a three-second network timeout before falling back to the public offline shell. This does not cache authenticated HTML or change API/admin handling. The browser regression deliberately stalls both the document response and session check; offline navigation waits for DOM content and then asserts usable application content rather than waiting for every failed subresource to finish.
 

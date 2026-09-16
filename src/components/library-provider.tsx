@@ -70,11 +70,26 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const { setTheme: applyTheme } = useTheme();
   const sessionGeneration = useRef(0);
+  const initialSession = useRef(true);
 
   const refreshSession = useCallback(async () => {
     const generation = ++sessionGeneration.current;
+    const restoreLocal = initialSession.current;
+    initialSession.current = false;
     try {
       if (isLocallySignedOut()) { setUser(null); return; }
+      // Opening an already prepared device must not depend on a network response.
+      // This identity only opens local storage; server requests still authenticate
+      // and bind their intended account. Revalidate below without blocking reading.
+      const local = restoreLocal ? cachedSession() : null;
+      if (local?.user) {
+        await activateLibrary(local.user.id);
+        if (generation !== sessionGeneration.current || isLocallySignedOut()) return;
+        setUser(local.user);
+        setUsage(local.usage);
+        setVerificationRequired(local.emailVerificationRequired);
+        setAuthLoading(false);
+      }
       let info;
       try {
         info = await authClient.session();
