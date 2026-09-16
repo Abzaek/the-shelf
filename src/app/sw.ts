@@ -19,7 +19,8 @@ const serwist = new Serwist({
         url.origin === self.location.origin &&
         !url.pathname.startsWith("/admin") &&
         !url.pathname.startsWith("/api"),
-      handler: new NetworkOnly(),
+      // A stalled connection must also reach the public offline fallback.
+      handler: new NetworkOnly({ networkTimeoutSeconds: 3 }),
     },
   ],
   fallbacks: {

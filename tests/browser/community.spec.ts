@@ -137,7 +137,7 @@ test("community pilot: invitation, consent, spoilers, replies, reports and moder
           data: { id: crypto.randomUUID(), offline: true },
         });
       else await context.setOffline(true);
-      await page.goto("/community");
+      await page.goto("/community", { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "The reading room" })).toBeVisible();
       await expect(page.getByText(/Community needs a connection/)).toBeVisible();
       expect(
