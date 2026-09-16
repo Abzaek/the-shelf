@@ -130,7 +130,10 @@ test("offline import survives reload and uploads after reconnect", async ({ page
       buffer: Buffer.from(await file.arrayBuffer()),
     });
   await page.getByRole("button", { name: "Add to shelf", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("Imported offline");
+  // The filename is already visible before saving. Wait for the confirmation
+  // emitted only after the file and metadata have both been persisted.
+  await expect(page.getByText("Added to your shelf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.reload();
   await expect(page.getByText("Imported offline", { exact: true }).first()).toBeVisible();
   await setOffline(context, false);

@@ -1,6 +1,6 @@
 # Offline personal reading verification — 2026-09-16
 
-Implementation is local and has not been deployed by this task. Author commerce and community features are outside this release.
+This report records pre-deployment verification. Check GitHub Actions and the production release for current deployment status. Author commerce and community features are outside this release.
 
 ## Automated verification
 
@@ -22,6 +22,8 @@ Implementation is local and has not been deployed by this task. Author commerce 
 Server tests also cover ordered checkpoints, duplicate pushes, independent field merges, membership removal/re-add, deletion tombstones, ownership, validation, origin checks, and encrypted Drive tokens. Mocked Google responses exercise OAuth state, PKCE, replay rejection, account separation, and refresh-token use without contacting a real Google account.
 
 ## Browser test details
+
+The first Linux CI run passed 20 of 21 cases and exposed an import-test race: the test checked the filename already visible in the form and reloaded before the save completed. The test now waits for the post-persistence success confirmation and dialog closure before checking offline reload durability; the durability assertion remains unchanged.
 
 Chromium uses Playwright's offline mode. WebKit uses a test-only localhost proxy that drops connections for one device cookie: this exercises real network failures and the application's own service-worker fallback. It avoids the limitations of [Playwright's Chromium-only service-worker tooling](https://playwright.dev/docs/service-workers). The proxy's control endpoint is absent from the production application.
 
