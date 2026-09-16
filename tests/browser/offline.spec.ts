@@ -94,7 +94,9 @@ test("download, cold offline launch, PDF reading, durable notes and reconnect", 
     .fill("Thought written without internet");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(page.getByText("Thought written without internet", { exact: true })).toBeVisible();
-  await page.reload();
+  // Offline WebKit may delay the load event for failed network requests.
+  // The reader/content assertions below establish actual application readiness.
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible();
   await openNotes(page);
   await expect(page.getByText("Thought written without internet", { exact: true })).toBeVisible();
@@ -134,7 +136,7 @@ test("offline import survives reload and uploads after reconnect", async ({ page
   // emitted only after the file and metadata have both been persisted.
   await expect(page.getByText("Added to your shelf", { exact: true })).toBeVisible();
   await expect(page.getByRole("dialog")).not.toBeVisible();
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText("Imported offline", { exact: true }).first()).toBeVisible();
   await setOffline(context, false);
   await expect
@@ -265,7 +267,7 @@ test("account switch never uploads the previous account's offline note", async (
   await context.addCookies(
     (await context.cookies()).map((cookie) => ({ ...cookie, secure: false })),
   );
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect
     .poll(
       async () =>
@@ -324,7 +326,7 @@ test("EPUB opens from a cold offline launch", async ({ page, context }) => {
       .frameLocator(".epub-view iframe")
       .getByText("Reading without a connection", { exact: true }),
   ).toBeVisible();
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(
     page
       .frameLocator(".epub-view iframe")

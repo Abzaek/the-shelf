@@ -15,8 +15,8 @@ This file is the canonical instruction entry point for humans and AI agents. Rea
 ## Product boundary
 
 - Current scope: reliable, private personal reading: PDF/EPUB, offline reading, synchronization, installation, and an optional user-owned Drive library.
-- Community features are not part of this implementation. Author commerce is deferred for at least one year from 2026-09-16 (until 2027-09-16), and still requires an explicit product decision afterwards.
-- Never turn a private upload, note, profile, or reading activity into public content implicitly.
+- An invite-only community pilot is authorized: explicit community names, curated book rooms, discussions/replies, reports, moderation, and aggregate participation metrics. Read `docs/architecture/community.md` and `docs/decisions/0002-community-pilot.md` before changing it. Author commerce is deferred for at least one year from 2026-09-16 (until 2027-09-16), and still requires an explicit product decision afterwards.
+- Never turn a private upload, note, profile, or reading activity into public content implicitly. Community shares only an explicitly chosen alias and intentionally published text; it must not join personal library tables or enter personal replication. Community drafts are never automatically published on reconnect.
 - No paid service, extra infrastructure dependency, or credential requirement without documenting why and how it affects deployment. Drive must remain optional.
 
 ## Read before editing
@@ -34,7 +34,7 @@ This file is the canonical instruction entry point for humans and AI agents. Rea
 - Pure protocol types, validation, and conflict functions must not import React, browser globals, database implementations, or secrets.
 - Keep API route handlers thin: authenticate, validate, call a server service, return a response.
 - Never add a second outbox or custom replication algorithm alongside RxDB. Use tus for resumable binary transfer. Document any dependency replacement in a new ADR.
-- Every server read/write must be scoped to the authenticated user. Device requests also bind the intended user ID. Never trust user IDs, roles, file paths, or quotas from replicated documents.
+- Every server read/write must be scoped to the authenticated user or an explicitly authorized community membership/moderator capability. Device requests also bind the intended user ID. Never trust user IDs, roles, file paths, or quotas from replicated documents.
 - Account caches are isolated. API responses and private files must never enter a shared service-worker cache. New offline routes must use the public data-free shell.
 - Persist before reporting success. Never discard pending writes/files to recover from a network error, quota error, logout, or migration failure.
 - Deletions require tombstones. Note conflicts preserve both versions. Never resolve all conflicts with device-clock last-write-wins.

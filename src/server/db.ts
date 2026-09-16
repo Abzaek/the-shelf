@@ -4,6 +4,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { assertRuntimeConfig, env } from "./env";
 import { analyticsMigration } from "./analytics/schema";
+import { communityMigration } from "./community/schema";
 
 /**
  * SQLite connection (one per process). WAL mode so reads never block writes.
@@ -155,6 +156,7 @@ export const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX file_uploads_revision ON file_uploads(user_id,book_id,kind,revision);
   UPDATE users SET quota_bytes = 52428800 WHERE quota_bytes = 262144000;
   `,
+  communityMigration,
 ];
 
 let instance: Database.Database | null = null;

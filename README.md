@@ -23,6 +23,7 @@ The `predev` / `prebuild` scripts copy the pdf.js worker that matches the instal
 - **EPUB reader** — paginated or scrolled, adjustable text size, light/dark themed content, table of contents, full-text search with in-text highlights, bookmarks and notes pinned to exact positions (CFIs). Progress is tracked in "locations" (roughly a paragraph each), generated once per book and cached.
 - Progress is saved automatically for both formats; reopening a book resumes where you left off. Opening a Want to Read book moves it to Reading; reaching the end offers to mark it Finished.
 - **Backup** — export metadata as `library-backup-v2.json`, or everything including the PDF/EPUB files as a zip. Import restores a backup (v1 or v2) without overwriting books you already have.
+- **Community pilot** — invited readers choose a community name, join curated book rooms, publish discussions/replies with spoiler controls, and report posts. Admins manage invitations, moderation, and aggregate participation from the Pilot desk. [Run the pilot](docs/community-pilot.md). Personal libraries stay private; community publishing requires a connection.
 - **Sample books** — seven placeholder books with generated PDFs so the flow can be tried without your own files. No copyrighted PDFs are included.
 
 ### Accounts and quotas
@@ -93,7 +94,7 @@ src/
 
 Library and reader UI use the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `local/bookStorage.ts`. Auth, installation, and Drive use small feature services. RxDB owns durable replication, checkpoints, retries, and tab leadership; the server applies authenticated compare-and-swap writes. Storage events refresh views automatically. The old HTTP adapter remains for compatibility, but it is not the normal reader data path.
 
-**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Every table is scoped by `user_id` and every route resolves the session before touching data. Hosted files use immutable revisions under `<SHELF_DATA_DIR>/users/<userId>/` and stream with HTTP Range support; existing legacy file paths remain readable. Resumable tus uploads stage separately until validated completion. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
+**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Private library tables are scoped by `user_id`; community uses explicit membership and moderator capabilities. Every route resolves the session before touching data. Hosted files use immutable revisions under `<SHELF_DATA_DIR>/users/<userId>/` and stream with HTTP Range support; existing legacy file paths remain readable. Resumable tus uploads stage separately until validated completion. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
 
 Shelf cards only load the small cover thumbnail; the full file is fetched only when the reader opens.
 
@@ -107,6 +108,6 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · Lucide ·
 
 The Shelf now uses account-scoped local storage and RxDB synchronization. Install the app from your browser, download books in Settings or book details, and keep reading offline. Imports and edits save on the device before synchronizing; keep the app open while files upload. Hosted storage defaults to 50 MiB per account. Google Drive is optional and requires operator configuration.
 
-Contributor entry point: [AGENTS.md](AGENTS.md). Read the [architecture](docs/architecture/overview.md), [offline protocol](docs/architecture/offline-sync.md), [change workflow](docs/contributing.md), and [Drive setup](docs/google-drive-setup.md) before making changes. Community and author commerce are outside this release.
+Contributor entry point: [AGENTS.md](AGENTS.md). Read the [architecture](docs/architecture/overview.md), [offline protocol](docs/architecture/offline-sync.md), [change workflow](docs/contributing.md), and [Drive setup](docs/google-drive-setup.md) before making changes. Read the [community architecture](docs/architecture/community.md) and [pilot guide](docs/community-pilot.md) for the invite-only community module. Author commerce remains deferred.
 
-Verification details and manual coverage limits: [offline reading test report](docs/testing/offline-reading-2026-09-16.md).
+Verification details and manual coverage limits: [offline reading test report](docs/testing/offline-reading-2026-09-16.md) and [community pilot test report](docs/testing/community-pilot-2026-09-16.md).

@@ -41,6 +41,7 @@ export default defineConfig({
       SHELF_MIN_FREE_DISK_BYTES: "0",
       SHELF_USER_QUOTA_BYTES: "52428800",
       SHELF_REGISTRATION: "open",
+      SHELF_SUPERADMIN_EMAIL: "community-host@example.test",
     },
   },
 });

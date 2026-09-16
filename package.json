@@ -13,9 +13,10 @@
     "test:analytics": "node scripts/analytics.test.cjs",
     "test:sync": "node scripts/sync.test.cjs",
     "check:architecture": "node scripts/check-architecture.mjs",
-    "check": "pnpm check:architecture && pnpm check:format && pnpm typecheck && pnpm exec eslint src && pnpm test:sync && pnpm test:analytics",
+    "check": "pnpm check:architecture && pnpm check:format && pnpm typecheck && pnpm exec eslint src && pnpm test:sync && pnpm test:analytics && pnpm test:community",
     "test:e2e": "playwright test",
-    "check:format": "prettier --check \"src/lib/{sync,drive,storage/local}/**/*.ts\" \"src/server/{sync,drive}/**/*.ts\" \"src/components/offline/**/*.tsx\" \"src/app/api/{sync,uploads,drive}/**/*.ts\" tests/browser playwright.config.ts scripts/browser-test-server.mjs"
+    "check:format": "prettier --check \"src/lib/{sync,drive,storage/local}/**/*.ts\" \"src/server/{sync,drive}/**/*.ts\" \"src/components/offline/**/*.tsx\" \"src/app/api/{sync,uploads,drive}/**/*.ts\" tests/browser playwright.config.ts scripts/browser-test-server.mjs \"src/{lib,server,components}/community/**/*.{ts,tsx}\" src/app/api/community/route.ts",
+    "test:community": "node scripts/community.test.cjs"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

@@ -15,6 +15,7 @@ const NAV = [
   { href: "/want-to-read", label: "Want to Read" },
   { href: "/finished", label: "Finished" },
   { href: "/collections", label: "Collections" },
+  { href: "/community", label: "Community" },
 ];
 
 export function ShelfHeader() {
@@ -35,7 +36,7 @@ export function ShelfHeader() {
           <span className="font-serif text-[19px] font-medium tracking-tight">The Shelf</span>
         </Link>
 
-        <nav aria-label="Library" className="hidden md:flex items-center gap-1 ml-4">
+        <nav aria-label="Library" className="hidden lg:flex items-center gap-1 ml-4">
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -88,7 +89,7 @@ export function ShelfHeader() {
       </div>
 
       {/* Mobile nav */}
-      <nav aria-label="Library" className="md:hidden overflow-x-auto scroll-hide">
+      <nav aria-label="Library" className="lg:hidden overflow-x-auto scroll-hide">
         <div className="mx-auto flex max-w-[1600px] gap-1 px-4 pb-2.5 sm:px-6">
           {NAV.map((item) => (
             <Link
