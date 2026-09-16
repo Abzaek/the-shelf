@@ -2,11 +2,14 @@ import { zipSync, strToU8 } from "fflate";
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { createPlaceholderPdf } from "../../src/lib/pdf/placeholder";
 const networkIds = new WeakMap<BrowserContext, string>();
-async function setOffline(context: BrowserContext, offline: boolean) {
-  if (context.browser()?.browserType().name() !== "webkit") return context.setOffline(offline);
+async function setOffline(context: BrowserContext, offline: boolean, stallNavigation = false) {
+  if (context.browser()?.browserType().name() !== "webkit" && !stallNavigation)
+    return context.setOffline(offline);
   const id = networkIds.get(context) ?? crypto.randomUUID();
   networkIds.set(context, id);
-  const response = await context.request.post("/__test/network", { data: { id, offline } });
+  const response = await context.request.post("/__test/network", {
+    data: { id, offline, stallNavigation },
+  });
   expect(response.ok()).toBeTruthy();
   // A proxy outage doesn't produce the OS online event; model reopening/resuming the app.
   if (!offline)
@@ -113,7 +116,10 @@ test("download, cold offline launch, PDF reading, durable notes and reconnect", 
   expect(errors).toEqual([]);
 });
 
-test("stalled session checks fall back to the downloaded library", async ({ page, context }) => {
+test("stalled navigation and session checks fall back to the downloaded library", async ({
+  page,
+  context,
+}) => {
   await register(context);
   const book = await seed(context);
   await ready(page);
@@ -140,8 +146,8 @@ test("stalled session checks fall back to the downloaded library", async ({ page
       return originalFetch(input, options);
     };
   });
-  await setOffline(context, true);
-  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded" });
+  await setOffline(context, true, true);
+  await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded", timeout: 10000 });
   // Check the request deadline independently from hydration/PDF rendering.
   // The normal render allowance starts once local-library fallback can run.
   await expect

@@ -13,6 +13,7 @@ const child = spawn(process.execPath, [path.join(release, "server.js")], {
   env: { ...process.env, PORT: "3111", HOSTNAME: "127.0.0.1" },
 });
 const disconnected = new Set();
+const stalledNavigations = new Set();
 const proxy = http.createServer((request, response) => {
   if (request.url === "/__test/network" && request.method === "POST") {
     let body = "";
@@ -20,13 +21,15 @@ const proxy = http.createServer((request, response) => {
       body += chunk;
     });
     request.on("end", () => {
-      const { id, offline } = JSON.parse(body);
+      const { id, offline, stallNavigation } = JSON.parse(body);
       if (!/^[a-f0-9-]{36}$/.test(id)) {
         response.writeHead(400).end();
         return;
       }
       if (offline) disconnected.add(id);
       else disconnected.delete(id);
+      if (offline && stallNavigation) stalledNavigations.add(id);
+      else stalledNavigations.delete(id);
       response
         .writeHead(200, {
           "Content-Type": "application/json",
@@ -41,6 +44,10 @@ const proxy = http.createServer((request, response) => {
     request.url === "/api/auth/register" &&
     String(request.headers["x-real-ip"] ?? "").startsWith("test-");
   if (device && disconnected.has(device) && !fixtureRegistration) {
+    // Simulate a connection that accepts a document request but never answers.
+    // The service worker must enforce its own deadline; no synthetic HTTP error.
+    if (stalledNavigations.has(device) && String(request.headers.accept).includes("text/html"))
+      return;
     request.socket.destroy();
     return;
   }

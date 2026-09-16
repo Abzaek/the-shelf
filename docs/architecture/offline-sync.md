@@ -37,6 +37,8 @@ No auth, admin, API, or private file response is runtime-cached by the service w
 
 Session checks have an eight-second deadline, including reading the response body. A stalled connection must release startup to the existing cached-identity fallback even if the browser reports online. This does not bypass server authentication or the local sign-out lock. Keep the stalled-session browser regression when changing startup or authentication.
 
+Document navigation uses Serwist's `NetworkOnly` strategy with a three-second network timeout before falling back to the public offline shell. This does not cache authenticated HTML or change API/admin handling. The browser regression deliberately stalls both the document response and session check; offline navigation waits for DOM content and then asserts usable application content rather than waiting for every failed subresource to finish.
+
 A new service worker waits for old windows to close. Do not add unconditional `skipWaiting`/reload-on-connect: unsaved editor drafts and schema compatibility need an explicit upgrade plan.
 
 ## Honest limits
