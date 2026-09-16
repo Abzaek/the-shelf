@@ -148,6 +148,8 @@ test("stalled navigation and session checks fall back to the downloaded library"
   });
   await setOffline(context, true, true);
   await page.goto(`/read/${book.id}`, { waitUntil: "domcontentloaded", timeout: 10000 });
+  // A prepared library opens before the eight-second network session deadline.
+  await expect(page.locator(".react-pdf__Page__canvas").first()).toBeVisible({ timeout: 7000 });
   // Check the request deadline independently from hydration/PDF rendering.
   // The normal render allowance starts once local-library fallback can run.
   await expect
