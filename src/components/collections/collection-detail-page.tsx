@@ -58,6 +58,15 @@ export function CollectionDetailPage({ id }: { id: string }) {
     await storage.updateCollection(collection.id, { bookIds: next });
   };
 
+  const removeBook = async (book: (typeof books)[number]) => {
+    try {
+      await toggle(book.id, false);
+      toast.success("Removed from collection", { description: book.title });
+    } catch (error) {
+      toast.error("Could not remove book", { description: error instanceof Error ? error.message : undefined });
+    }
+  };
+
   const remove = async () => {
     await storage.deleteCollection(collection.id);
     toast("Collection deleted", { description: "The books stay on your shelf." });
@@ -113,7 +122,7 @@ export function CollectionDetailPage({ id }: { id: string }) {
       </div>
 
       {members.length ? (
-        <BookGrid books={members} onOpen={(b) => openBook(b.id)} />
+        <BookGrid books={members} onOpen={(b) => openBook(b.id)} onRemove={(book) => void removeBook(book)} />
       ) : (
         <p className="py-16 text-center font-serif text-lg italic text-muted-foreground">No books in this collection yet.</p>
       )}

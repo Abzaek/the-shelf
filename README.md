@@ -47,6 +47,8 @@ Three roles: `user`, `admin`, `superadmin`. The super admin is pinned to `SHELF_
 
 When email verification is enabled, new accounts receive a confirmation link (valid 24 h, single-use). Until confirmed, the account can sign in but every library route returns 403 and the app shows a "check your inbox" screen with a resend button (3 per hour).
 
+The sign-in page offers password recovery by email. Reset links are single-use and expire after one hour; using one changes the password and signs out all active sessions. Configure Resend for production email delivery. Without an email provider, reset links are written to the server log for local development.
+
 ### Keyboard shortcuts in the reader
 
 | Keys | Action |
@@ -94,7 +96,7 @@ src/
 
 Library and reader UI use the `BookStorage` interface in `src/lib/storage/bookStorage.ts`, implemented by `local/bookStorage.ts`. Auth, installation, and Drive use small feature services. RxDB owns durable replication, checkpoints, retries, and tab leadership; the server applies authenticated compare-and-swap writes. Storage events refresh views automatically. The old HTTP adapter remains for compatibility, but it is not the normal reader data path.
 
-**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification through Resend (hashed single-use tokens). Private library tables are scoped by `user_id`; community uses explicit membership and moderator capabilities. Every route resolves the session before touching data. Hosted files use immutable revisions under `<SHELF_DATA_DIR>/users/<userId>/` and stream with HTTP Range support; existing legacy file paths remain readable. Resumable tus uploads stage separately until validated completion. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
+**Server** (`src/server/`, `src/app/api/`): SQLite via `better-sqlite3` (WAL, numbered migrations), scrypt password hashes, opaque session tokens in an httpOnly cookie with sliding 30-day expiry, per-IP/per-email login rate limiting, email verification and password reset through Resend (hashed single-use tokens). Private library tables are scoped by `user_id`; community uses explicit membership and moderator capabilities. Every route resolves the session before touching data. Hosted files use immutable revisions under `<SHELF_DATA_DIR>/users/<userId>/` and stream with HTTP Range support; existing legacy file paths remain readable. Resumable tus uploads stage separately until validated completion. Uploads are checked against the account quota, the global cap, and free disk space before a byte is written.
 
 Shelf cards only load the small cover thumbnail; the full file is fetched only when the reader opens.
 

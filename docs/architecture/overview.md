@@ -29,6 +29,8 @@ Read `AGENTS.md` first. Scope is private personal reading plus an invite-only co
 
 ## Identity and storage
 
+Password recovery uses the existing hashed, single-use email-token table. Reset requests return the same response for known and unknown addresses; one-hour reset links update the password and revoke all active sessions. Email delivery uses the existing optional Resend configuration, with link logging reserved for development.
+
 Each account has `shelf-v1-<id>` (RxDB) and `shelf-assets-v1-<id>` (Dexie). Sign-out locks local access and stops replication, but retains pending work for the same account's next online login. This is account separation in the application, not encryption against someone with access to the browser profile. Explicit account deletion also erases that account’s local databases on the current device. Other offline devices cannot be remotely erased. Clearing browser data can destroy unsynced work; backups remain important.
 
 `Book.fileSource` distinguishes hosted files from Drive files. Revisioned file and cover IDs prevent an old download from being mistaken for a newer file. A book can exist on the server before its bytes arrive; the UI reports local/pending state and unavailable downloads honestly.
