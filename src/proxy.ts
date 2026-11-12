@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "shelf_session";
-const PUBLIC = ["/login", "/register"];
+const PUBLIC = ["/login", "/register", "/forgot-password", "/reset-password"];
 const VERIFY = "/verify";
 
 /**
