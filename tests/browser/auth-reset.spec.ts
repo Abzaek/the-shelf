@@ -33,6 +33,20 @@ function seedResetToken(userId: string) {
   return token;
 }
 
+test("password recovery pages are reachable without a signed-in session", async ({
+  page,
+  context,
+}) => {
+  expect(await context.cookies()).toHaveLength(0);
+  await page.goto("/forgot-password");
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+
+  await page.goto("/reset-password?token=fixture-token-that-is-not-valid");
+  await expect(page).toHaveURL(/\/reset-password\?token=/);
+  await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+});
+
 test("password recovery request and reset work through the browser", async ({ page, context }) => {
   const email = `password-reset-${randomUUID()}@example.test`;
   const oldPassword = "existing-password-123";

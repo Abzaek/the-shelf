@@ -40,7 +40,7 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 const VERIFY_PATH = "/verify";
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
