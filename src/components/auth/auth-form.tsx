@@ -84,6 +84,13 @@ export function AuthForm({ mode }: AuthFormProps) {
           {busy ? "One moment…" : mode === "login" ? "Sign in" : "Create account"}
         </Button>
       </form>
+      {mode === "login" && (
+        <p className="mt-3 text-right text-sm">
+          <Link href="/forgot-password" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+      )}
       <p className="mt-6 text-center text-sm text-muted-foreground">
         {mode === "login" ? (
           <>

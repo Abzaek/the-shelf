@@ -111,7 +111,7 @@ export function markEmailVerified(userId: string): void {
 
 // ------------------------------------------------------------- email tokens
 
-export type EmailTokenPurpose = "verify";
+export type EmailTokenPurpose = "verify" | "reset-password";
 
 /** Creates a single-use token (returned raw; only its hash is stored). Older tokens for the purpose are invalidated. */
 export function createEmailToken(userId: string, purpose: EmailTokenPurpose, ttlMs = 24 * 3_600_000): string {
@@ -134,6 +134,25 @@ export function consumeEmailToken(token: string, purpose: EmailTokenPurpose): st
   db.prepare("UPDATE email_tokens SET consumed_at = ? WHERE id = ?").run(now(), row.id);
   db.prepare("DELETE FROM email_tokens WHERE expires_at < ?").run(now());
   return row.user_id;
+}
+
+/** Consume a password-reset token, update the password, and revoke sessions atomically. */
+export async function resetPasswordWithToken(token: string, password: string): Promise<boolean> {
+  const passwordHash = await hashPassword(password);
+  const db = getDb();
+  return db.transaction(() => {
+    const row = db
+      .prepare("SELECT id, user_id, expires_at, consumed_at FROM email_tokens WHERE token_hash = ? AND purpose = ?")
+      .get(hashToken(token), "reset-password") as
+      | { id: string; user_id: string; expires_at: string; consumed_at: string | null }
+      | undefined;
+    if (!row || row.consumed_at || row.expires_at < now()) return false;
+    const ts = now();
+    db.prepare("UPDATE email_tokens SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL").run(ts, row.id);
+    db.prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?").run(passwordHash, ts, row.user_id);
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(row.user_id);
+    return true;
+  })();
 }
 
 export function countUsers(): number {

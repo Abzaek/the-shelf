@@ -62,6 +62,10 @@ export const authClient = {
   logout: () => post<{ ok: true }>("/api/auth/logout"),
   verifyEmail: (token: string) => post<{ user: SessionUser }>("/api/auth/verify", { token }),
   resendVerification: () => post<{ ok: true; alreadyVerified?: boolean }>("/api/auth/resend-verification"),
+  requestPasswordReset: (email: string) =>
+    post<{ ok: true; message: string }>("/api/auth/request-password-reset", { email }),
+  resetPassword: (token: string, password: string) =>
+    post<{ ok: true }>("/api/auth/reset-password", { token, password }),
   deleteAccount: async (password: string): Promise<void> => {
     const res = await fetch("/api/auth/account", {
       method: "DELETE",

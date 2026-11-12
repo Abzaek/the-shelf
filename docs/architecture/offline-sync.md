@@ -17,7 +17,7 @@
 - Simultaneous scalar changes prefer the server value.
 - Notes preserve concurrent text in `conflictCopies`, displayed in the reader and retained in exports.
 - Resume page/CFI/progress form one unit. Concurrent resume edits prefer the server's position, while `readingPositions` retains per-device positions for explicit selection.
-- Collection membership is a separate record per book/collection. Explicit re-add after observing a removed membership is allowed; stale edits cannot resurrect a deleted book or collection.
+- Collection membership is a separate record per book/collection. Removing a book from a collection tombstones only that membership, leaving the book and its other memberships intact. Explicit re-add after observing a removed membership is allowed; stale edits cannot resurrect a deleted book or collection.
 - Deletions win over concurrent edits. Restoring a backup uses new book IDs.
 - PDF pages and EPUB locations are different units. Reading backwards is valid.
 
